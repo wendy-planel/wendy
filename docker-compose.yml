@@ -11,6 +11,7 @@ services:
     environment:
       - DATABASE_URL=${DATABASE_URL:-sqlite://data/wendy.sqlite3}
       - DOCKER_VOLUME=${DOCKER_VOLUME:-wendy_data}
+      - DEPLOYMENT_PATH=${DOCKER_VOLUME:-/app/data}
       - DOCKERFILE_PATH=${DOCKERFILE_PATH:-/app/template/Dockerfile.tar.xz}
     ports:
       - "8000:8000"

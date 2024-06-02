@@ -3,6 +3,7 @@ import os
 APP_NAME = "wendy"
 DOCKER_VOLUME = os.environ.get("DOCKER_VOLUME")
 DOCKERFILE_PATH = os.environ.get("DOCKERFILE_PATH")
+DEPLOYMENT_PATH = os.environ.get("DEPLOYMENT_PATH")
 DOCKER_URL = os.environ.get("DOCKER_URL", "unix:///var/run/docker.sock")
 
 
