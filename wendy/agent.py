@@ -4,10 +4,22 @@ import asyncio
 import aiodocker
 
 from wendy.cluster import Cluster, ClusterWorld
-from wendy.settings import DOCKER_URL, DEPLOYMENT_PATH, DOCKERFILE_PATH
+from wendy.settings import (
+    DOCKER_URL,
+    DOCKER_VOLUME,
+    DOCKERFILE_PATH,
+)
 
 
 docker = aiodocker.Docker(DOCKER_URL)
+
+
+async def get_volume_path(id: str):
+    volumes = await docker.volumes.list()
+    for volume in volumes:
+        if volume["Name"] == DOCKER_VOLUME:
+            return os.path.join(volume["Mountpoint"], id)
+    raise RuntimeError("not found volume")
 
 
 async def update_mods(
@@ -16,7 +28,7 @@ async def update_mods(
     timeout: int = 30,
 ):
     container_name = f"dst_update_mods_{id}"
-    file_path = os.path.join(DEPLOYMENT_PATH, id)
+    file_path = await get_volume_path(id)
     config = {
         "Image": image,
         "RestartPolicy": {"Name": "no"},
@@ -68,7 +80,7 @@ async def deploy_world(
         "StartPeriod": 300000000000,
     }
     container_name = f"dst_{name.lower()}_{id}"
-    file_path = os.path.join(DEPLOYMENT_PATH, id)
+    file_path = await get_volume_path(id)
     config = {
         "Image": image,
         "RestartPolicy": {"Name": "always"},

@@ -7,11 +7,14 @@ services:
     image: wendy-apiserver:${IMAGE_TAG:-latest}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /data/dst/deply:/data/dst/deply  # 保持一致
+      - data:/app/data
     environment:
-      - DEPLOYMENT_PATH=${DEPLOYMENT_PATH:-/data/dst/deply}
       - DATABASE_URL=${DATABASE_URL:-sqlite://data/wendy.sqlite3}
+      - DOCKER_VOLUME=${DOCKER_VOLUME:-wendy_data}
       - DOCKERFILE_PATH=${DOCKERFILE_PATH:-/app/template/Dockerfile.tar.xz}
     ports:
       - "8000:8000"
     restart: always
+
+volumes:
+  data:
