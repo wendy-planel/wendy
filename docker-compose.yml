@@ -8,9 +8,7 @@ services:
     volumes:
       - data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
-      - ${DOCKGE_STACKS_PATH:-./}:/app/dockge/stacks
     environment:
-      - DOCKGE_STACKS_PATH=/app/dockge/stacks
       - DOCKER_VOLUME=${DOCKER_VOLUME:-wendy_data}
       - DEPLOYMENT_PATH=${DOCKER_VOLUME:-/app/data}
       - DATABASE_URL=${DATABASE_URL:-sqlite://data/wendy.sqlite3}

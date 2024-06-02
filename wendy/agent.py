@@ -1,9 +1,6 @@
-from typing import List, Tuple
-
 import os
 import asyncio
 
-import yaml
 import aiodocker
 
 from wendy.cluster import Cluster, ClusterWorld
@@ -11,7 +8,6 @@ from wendy.settings import (
     DOCKER_URL,
     DOCKER_VOLUME,
     DOCKERFILE_PATH,
-    DOCKGE_STACKS_PATH,
 )
 
 
@@ -72,28 +68,6 @@ async def update_mods(
     return container_name
 
 
-def save_docker_compose(id: str, services: List[Tuple[str, dict]]):
-    docker_compose = {
-        "version": "3.8",
-        "services": {},
-    }
-    for container_name, config in services:
-        docker_compose["services"][container_name] = {
-            "image": config["Image"],
-            "container_name": container_name,
-            "restart": config["RestartPolicy"]["Name"],
-            "command": config["Cmd"],
-            "volumes": config["HostConfig"]["Binds"],
-            "network_mode": config["HostConfig"]["NetworkMode"],
-        }
-    file_path = os.path.join(DOCKGE_STACKS_PATH, f"dst_{id}")
-    if not os.path.exists(file_path):
-        os.makedirs(file_path)
-    file_path = os.path.join(file_path, "docker-compose.yml")
-    with open(file_path, "w", encoding="utf-8") as file:
-        yaml.dump(docker_compose, file, default_flow_style=False)
-
-
 async def deploy_world(
     id: str,
     image: str,
@@ -132,7 +106,7 @@ async def deploy_world(
         config=config,
     )
     await container.restart()
-    return container_name, config
+    return container_name
 
 
 async def deploy(
@@ -140,19 +114,15 @@ async def deploy(
     cluster: Cluster,
 ):
     image = await build(cluster.version)
-    services = []
     # 先更新模组
     container_name = await update_mods(id, image)
     cluster.containers.append(container_name)
     # 部署主世界
-    container_name, config = await deploy_world(id, image, cluster.master)
+    container_name = await deploy_world(id, image, cluster.master)
     cluster.containers.append(container_name)
-    services.append((container_name, config))
     # 部署洞穴
-    container_name, config = await deploy_world(id, image, cluster.caves)
+    container_name = await deploy_world(id, image, cluster.caves)
     cluster.containers.append(container_name)
-    services.append((container_name, config))
-    save_docker_compose(id, services)
 
 
 async def build(version: str) -> str:
