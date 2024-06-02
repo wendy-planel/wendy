@@ -377,7 +377,7 @@ CLUSTER_DEFAULT = {
         "game_mode": "endless",
         "max_players": 6,
         "pvp": False,
-        "pause_when_empty": False,
+        "pause_when_empty": True,
         "vote_enabled": False,
         "lan_only_cluster": False,
         "cluster_password": "",
