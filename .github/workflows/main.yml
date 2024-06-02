@@ -22,7 +22,7 @@ jobs:
       run: mkdir -p ~/.ssh
 
     - name: Setup SSH 2
-      run: ssh-keyscan ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+      run: ssh-keyscan -p 6000 ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
 
     - name: Setup SSH 3
       run: echo ${{ secrets.SSH_PUB_KEY }} >> ~/.ssh/id_rsa.pub
