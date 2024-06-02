@@ -100,12 +100,6 @@ async def deploy_world(
     world: ClusterWorld,
 ):
     name = world.name
-    health_check = {
-        "Test": ["CMD", "nc", "-zuv", "127.0.0.1", str(world.ini.server_port)],
-        "Interval": 2000000000,
-        "Timeout": 30000000000,
-        "StartPeriod": 300000000000,
-    }
     container_name = f"dst_{name.lower()}_{id}"
     file_path = await get_volume_path(id)
     config = {
@@ -132,7 +126,6 @@ async def deploy_world(
             ],
             "NetworkMode": "host",
         },
-        "Healthcheck": health_check,
     }
     container = await docker.containers.create_or_replace(
         name=container_name,
