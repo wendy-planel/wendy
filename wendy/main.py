@@ -24,6 +24,8 @@ async def lifespan(app: FastAPI):
         config=TORTOISE_ORM,
         add_exception_handlers=False,
     )
+    # TODO 清理脱离管控的容器
+    # TODO 饥荒游戏更新: 重新部署-当没有玩家的时候
     yield
 
 

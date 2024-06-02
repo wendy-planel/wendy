@@ -1,0 +1,20 @@
+version: '3.8'
+services:
+  wendy-apiserver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: wendy-apiserver:${IMAGE_TAG:-latest}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - data:/app/data
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-sqlite://data/wendy.sqlite3}
+      - DOCKERFILE_PATH=${DOCKERFILE_PATH:-/app/template/Dockerfile.tar.xz}
+      - DEPLOYMENT_PATH=${DEPLOYMENT_PATH:-/app/data/deply}
+    ports:
+      - "8000:8000"
+    restart: always
+
+volumes:
+  data:
