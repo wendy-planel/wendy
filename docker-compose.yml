@@ -6,12 +6,14 @@ services:
       dockerfile: Dockerfile
     image: wendy-apiserver:${IMAGE_TAG:-latest}
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
       - data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCKGE_STACKS_PATH:-./}:/app/dockge/stacks
     environment:
-      - DATABASE_URL=${DATABASE_URL:-sqlite://data/wendy.sqlite3}
+      - DOCKGE_STACKS_PATH=/app/dockge/stacks
       - DOCKER_VOLUME=${DOCKER_VOLUME:-wendy_data}
       - DEPLOYMENT_PATH=${DOCKER_VOLUME:-/app/data}
+      - DATABASE_URL=${DATABASE_URL:-sqlite://data/wendy.sqlite3}
       - DOCKERFILE_PATH=${DOCKERFILE_PATH:-/app/template/Dockerfile.tar.xz}
     ports:
       - "8000:8000"
