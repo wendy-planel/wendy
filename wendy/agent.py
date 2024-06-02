@@ -16,7 +16,7 @@ docker = aiodocker.Docker(DOCKER_URL)
 
 async def get_volume_path(id: str):
     volumes = await docker.volumes.list()
-    for volume in volumes:
+    for volume in volumes["Volumes"]:
         if volume["Name"] == DOCKER_VOLUME:
             return os.path.join(volume["Mountpoint"], id)
     raise RuntimeError("not found volume")
@@ -53,7 +53,8 @@ async def update_mods(
         },
     }
     container = await docker.containers.create_or_replace(
-        name=container_name, config=config
+        name=container_name,
+        config=config,
     )
     await container.restart()
     while timeout > 0:
@@ -108,7 +109,8 @@ async def deploy_world(
         "Healthcheck": health_check,
     }
     container = await docker.containers.create_or_replace(
-        name=container_name, config=config
+        name=container_name,
+        config=config,
     )
     await container.restart()
     return container_name
@@ -136,7 +138,10 @@ async def build(version: str) -> str:
     while True:
         with open(DOCKERFILE_PATH, "rb") as file:
             await docker.images.build(
-                fileobj=file, tag=tag, buildargs=buildargs, encoding="utf-8"
+                fileobj=file,
+                tag=tag,
+                buildargs=buildargs,
+                encoding="utf-8",
             )
         # 判单是否构建成功
         try:
