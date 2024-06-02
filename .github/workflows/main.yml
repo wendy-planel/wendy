@@ -34,11 +34,11 @@ jobs:
       run: chmod 600 ~/.ssh/id_rsa && chmod 644 ~/.ssh/id_rsa.pub
     
     - name: Create Dir
-      run: ssh -p 6000 ylei01@${{ secrets.SERVER_HOST }} "mkdir -p /ylei01/apps/wendy"
+      run: ssh -p 6000 ylei01@${{ secrets.SERVER_HOST }} "mkdir -p /home/ylei01/apps/wendy"
 
     - name: Sync files
       run: |
-        rsync -av --delete --exclude='.*' -e "ssh -p 6000" code/ ylei01@${{ secrets.SERVER_HOST }}:/ylei01/apps/wendy
+        rsync -av --delete --exclude='.*' -e "ssh -p 6000" code/ ylei01@${{ secrets.SERVER_HOST }}:/home/ylei01/apps/wendy
 
     - name: Run
-      run: ssh -p 6000 ylei01@${{ secrets.SERVER_HOST }} "export IMAGE_TAG=${GITHUB_SHA::4}_$(date +'%Y%m%d') && cd /ylei01/apps/wendy && docker compose up -d"
+      run: ssh -p 6000 ylei01@${{ secrets.SERVER_HOST }} "export IMAGE_TAG=${GITHUB_SHA::4}_$(date +'%Y%m%d') && cd /home/ylei01/apps/wendy && docker compose up -d"
