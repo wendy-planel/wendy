@@ -25,9 +25,9 @@ async def create(
     # 获取部署版本号
     async with httpx.AsyncClient() as client:
         response = await client.get("https://api.steamcmd.net/v1/info/343050")
-        version = response.json()["data"]["343050"]["depots"]["branches"]["public"][
-            "buildid"
-        ]
+    version = response.json()["data"]["343050"]["depots"]["branches"]["public"][
+        "buildid"
+    ]
     deploy = await models.Deploy.create(
         content={},
         status=DeployStatus.pendding,

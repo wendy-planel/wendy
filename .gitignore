@@ -163,3 +163,4 @@ cython_debug/
 *.ipynb
 tmp/
 *sqlite3*
+makefile

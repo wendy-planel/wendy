@@ -2,6 +2,7 @@ import os
 import asyncio
 
 import aiodocker
+import structlog
 
 from wendy.cluster import Cluster, ClusterWorld
 from wendy.settings import (
@@ -11,6 +12,7 @@ from wendy.settings import (
 )
 
 
+log = structlog.get_logger()
 docker = aiodocker.Docker(DOCKER_URL)
 
 
@@ -128,7 +130,8 @@ async def deploy(
 async def build(version: str) -> str:
     tag = f"dontstarvetogether:{version}"
     buildargs = {"DST_BRANCH": version}
-    while True:
+    max_count = 8
+    while max_count > 0:
         with open(DOCKERFILE_PATH, "rb") as file:
             await docker.images.build(
                 fileobj=file,
@@ -140,9 +143,15 @@ async def build(version: str) -> str:
         try:
             await docker.images.get(tag)
             break
+        except Exception as e:
+            log.exception(f"build image {tag} error: {e}")
         finally:
             await asyncio.sleep(3)
-    return tag
+            max_count -= 1
+    if max_count == 0:
+        return "superjump22/dontstarvetogether:latest"
+    else:
+        return tag
 
 
 async def delete(cluster: Cluster):
