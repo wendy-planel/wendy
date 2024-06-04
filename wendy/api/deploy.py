@@ -83,4 +83,4 @@ async def stop(
     deploy = await models.Deploy.get(id=id)
     cluster = Cluster.model_validate(deploy.content)
     await agent.stop(cluster)
-    return await models.Deploy.filter(id=id).delete()
+    return await models.Deploy.filter(id=id).update(status=DeployStatus.stop)
