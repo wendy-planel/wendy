@@ -25,12 +25,11 @@ async def create(
     # 获取部署版本号
     async with httpx.AsyncClient() as client:
         response = await client.get("https://api.steamcmd.net/v1/info/343050")
-    version = response.json()["data"]["343050"]["depots"]["branches"]["public"][
-        "buildid"
-    ]
+    public = response.json()["data"]["343050"]["depots"]["branches"]["public"]
+    version = public["buildid"]
     deploy = await models.Deploy.create(
         content={},
-        status=DeployStatus.pendding,
+        status=DeployStatus.pending,
     )
     # 根据ID生成7个端口号
     ports = [(10000 + deploy.id * 7 + i) for i in range(7)]

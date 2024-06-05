@@ -2,7 +2,7 @@ from enum import StrEnum
 
 
 class DeployStatus(StrEnum):
-    pendding = "pendding"
+    pending = "pending"
     running = "running"
     stop = "stop"
     exited = "exited"
