@@ -5,23 +5,11 @@ import aiodocker
 import structlog
 
 from wendy.cluster import Cluster, ClusterWorld
-from wendy.settings import (
-    DOCKER_URL,
-    DOCKER_VOLUME,
-    DOCKERFILE_PATH,
-)
+from wendy.settings import DOCKER_URL, DEPLOYMENT_PATH
 
 
 log = structlog.get_logger()
 docker = aiodocker.Docker(DOCKER_URL)
-
-
-async def get_volume_path(id: str):
-    volumes = await docker.volumes.list()
-    for volume in volumes["Volumes"]:
-        if volume["Name"] == DOCKER_VOLUME:
-            return os.path.join(volume["Mountpoint"], id)
-    raise RuntimeError("not found volume")
 
 
 async def update_mods(
@@ -30,7 +18,7 @@ async def update_mods(
     timeout: int = 30,
 ):
     container_name = f"dst_update_mods_{id}"
-    file_path = await get_volume_path(id)
+    file_path = os.path.join(DEPLOYMENT_PATH, id)
     config = {
         "Image": image,
         "RestartPolicy": {"Name": "no"},
@@ -77,7 +65,7 @@ async def deploy_world(
 ):
     name = world.name
     container_name = f"dst_{name.lower()}_{id}"
-    file_path = await get_volume_path(id)
+    file_path = os.path.join(DEPLOYMENT_PATH, id)
     config = {
         "Image": image,
         "RestartPolicy": {"Name": "always"},
@@ -128,30 +116,8 @@ async def deploy(
 
 
 async def build(version: str) -> str:
-    tag = f"dontstarvetogether:{version}"
-    buildargs = {"DST_BRANCH": version}
-    max_count = 8
-    while max_count > 0:
-        with open(DOCKERFILE_PATH, "rb") as file:
-            await docker.images.build(
-                fileobj=file,
-                tag=tag,
-                buildargs=buildargs,
-                encoding="utf-8",
-            )
-        # 判单是否构建成功
-        try:
-            await docker.images.get(tag)
-            break
-        except Exception as e:
-            log.exception(f"build image {tag} error: {e}")
-        finally:
-            await asyncio.sleep(3)
-            max_count -= 1
-    if max_count == 0:
-        return "superjump22/dontstarvetogether:latest"
-    else:
-        return tag
+    log.info(f"image: {version}")
+    return "superjump22/dontstarvetogether:latest"
 
 
 async def delete(cluster: Cluster):

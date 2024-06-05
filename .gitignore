@@ -164,3 +164,4 @@ cython_debug/
 tmp/
 *sqlite3*
 makefile
+data/
