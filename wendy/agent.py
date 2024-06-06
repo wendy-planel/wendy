@@ -1,9 +1,13 @@
+from typing import List
+
 import os
 import asyncio
 
 import aiodocker
 import structlog
 
+from wendy import models, steamcmd
+from wendy.constants import DeployStatus
 from wendy.cluster import Cluster, ClusterWorld
 from wendy.settings import DOCKER_URL, DEPLOYMENT_PATH
 
@@ -116,8 +120,17 @@ async def deploy(
 
 
 async def build(version: str) -> str:
-    log.info(f"image: {version}")
-    return "superjump22/dontstarvetogether:latest"
+    tag = f"ylei2023/dontstarvetogether:{version}"
+    max_retry = 3
+    while max_retry > 0:
+        try:
+            await docker.images.inspect(tag)
+            return tag
+        except Exception:
+            await docker.images.pull(from_image=tag)
+            await asyncio.sleep(3)
+        max_retry -= 1
+    raise ValueError(f"image: {tag} not found")
 
 
 async def delete(cluster: Cluster):
@@ -131,3 +144,57 @@ async def stop(cluster: Cluster):
     for name in cluster.containers:
         container = await docker.containers.get(name)
         await container.stop()
+
+
+def get_deploy_id(names: List[str]) -> int:
+    for name in names:
+        if "dst" in name:
+            return int(name.split("_")[-1])
+    return -1
+
+
+async def monitor():
+    """当版本更新时，重新部署所有容器"""
+    while True:
+        try:
+            log.info("monitor dst containers")
+            version = await steamcmd.dst_version()
+            containers = await docker.containers.list()
+            # 记录部署ID
+            dst = set()
+            for container in containers:
+                names = container._container.get("Names", [])
+                if (deploy_id := get_deploy_id(names)) != -1:
+                    dst.add(deploy_id)
+            deploy_queryset = await models.Deploy.all()
+            deploy_map = {deploy.id: deploy for deploy in deploy_queryset}
+            # 读取部署
+            for id in dst:
+                if id in deploy_map:
+                    deploy = deploy_map.pop(id)
+                    cluster = Cluster.model_validate(deploy.content)
+                    if (
+                        deploy.status != DeployStatus.stop
+                        and cluster.version != version
+                    ):
+                        cluster.version = version
+                        await deploy(id, cluster)
+                        deploy.status = DeployStatus.running
+                        deploy.content = cluster.model_dump()
+                        await deploy.save()
+                else:
+                    log.warning(f"deploy {id} running not managed")
+            # 未启动的容器重新启动
+            for id in deploy_map:
+                deploy = deploy_map[id]
+                if deploy.status != DeployStatus.stop:
+                    cluster = Cluster.model_validate(deploy.content)
+                    cluster.version = version
+                    await deploy(id, cluster)
+                    deploy.status = DeployStatus.running
+                    deploy.content = cluster.model_dump()
+                    await deploy.save()
+        except Exception as e:
+            log.exception(f"monitor: {e}")
+        finally:
+            await asyncio.sleep(30 * 60)

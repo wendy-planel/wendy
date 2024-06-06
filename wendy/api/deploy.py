@@ -1,10 +1,8 @@
 from fastapi import APIRouter, Body, Path
-
-import httpx
 from tortoise.transactions import atomic
 
-from wendy import models, agent
 from wendy.cluster import Cluster
+from wendy import models, agent, steamcmd
 from wendy.constants import DeployStatus
 from wendy.settings import DEPLOYMENT_PATH
 
@@ -23,10 +21,7 @@ async def create(
     cluster_description: str = Body(),
 ):
     # 获取部署版本号
-    async with httpx.AsyncClient() as client:
-        response = await client.get("https://api.steamcmd.net/v1/info/343050")
-    public = response.json()["data"]["343050"]["depots"]["branches"]["public"]
-    version = public["buildid"]
+    version = await steamcmd.dst_version()
     deploy = await models.Deploy.create(
         content={},
         status=DeployStatus.pending,

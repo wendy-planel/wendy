@@ -1,11 +1,14 @@
 """服务入口"""
 
+import asyncio
+
 from contextlib import asynccontextmanager
 
 from aerich import Command
 from fastapi import FastAPI
 from tortoise.contrib.fastapi import register_tortoise
 
+from wendy import agent
 from wendy.api import router
 from wendy.settings import APP_NAME, TORTOISE_ORM
 
@@ -24,8 +27,7 @@ async def lifespan(app: FastAPI):
         config=TORTOISE_ORM,
         add_exception_handlers=False,
     )
-    # TODO 清理脱离管控的容器
-    # TODO 饥荒游戏更新: 重新部署-当没有玩家的时候
+    asyncio.create_task(agent.monitor())
     yield
 
 
