@@ -166,34 +166,31 @@ async def monitor():
                 names = container._container.get("Names", [])
                 if (deploy_id := get_deploy_id(names)) != -1:
                     dst.add(deploy_id)
-            deploy_queryset = await models.Deploy.all()
-            deploy_map = {deploy.id: deploy for deploy in deploy_queryset}
+            dpy_queryset = await models.Deploy.all()
+            dpy_map = {dpy.id: dpy for dpy in dpy_queryset}
             # 读取部署
             for id in dst:
-                if id in deploy_map:
-                    deploy = deploy_map.pop(id)
-                    cluster = Cluster.model_validate(deploy.content)
-                    if (
-                        deploy.status != DeployStatus.stop
-                        and cluster.version != version
-                    ):
+                if id in dpy_map:
+                    dpy = dpy_map.pop(id)
+                    cluster = Cluster.model_validate(dpy.content)
+                    if dpy.status != DeployStatus.stop and cluster.version != version:
                         cluster.version = version
                         await deploy(id, cluster)
-                        deploy.status = DeployStatus.running
-                        deploy.content = cluster.model_dump()
-                        await deploy.save()
+                        dpy.status = DeployStatus.running
+                        dpy.content = cluster.model_dump()
+                        await dpy.save()
                 else:
                     log.warning(f"deploy {id} running not managed")
             # 未启动的容器重新启动
-            for id in deploy_map:
-                deploy = deploy_map[id]
-                if deploy.status != DeployStatus.stop:
-                    cluster = Cluster.model_validate(deploy.content)
+            for id in dpy_map:
+                dpy = dpy_map[id]
+                if dpy.status != DeployStatus.stop:
+                    cluster = Cluster.model_validate(dpy.content)
                     cluster.version = version
                     await deploy(id, cluster)
-                    deploy.status = DeployStatus.running
-                    deploy.content = cluster.model_dump()
-                    await deploy.save()
+                    dpy.status = DeployStatus.running
+                    dpy.content = cluster.model_dump()
+                    await dpy.save()
         except Exception as e:
             log.exception(f"monitor: {e}")
         finally:
