@@ -146,11 +146,11 @@ async def stop(cluster: Cluster):
         await container.stop()
 
 
-def get_deploy_id(names: List[str]) -> int:
+def get_deploy_id(names: List[str]) -> str:
     for name in names:
         if "dst" in name:
-            return int(name.split("_")[-1])
-    return -1
+            return name.split("_")[-1]
+    return ""
 
 
 async def monitor():
@@ -164,10 +164,10 @@ async def monitor():
             dst = set()
             for container in containers:
                 names = container._container.get("Names", [])
-                if (deploy_id := get_deploy_id(names)) != -1:
+                if deploy_id := get_deploy_id(names):
                     dst.add(deploy_id)
             dpy_queryset = await models.Deploy.all()
-            dpy_map = {dpy.id: dpy for dpy in dpy_queryset}
+            dpy_map = {str(dpy.id): dpy for dpy in dpy_queryset}
             # 读取部署
             for id in dst:
                 if id in dpy_map:
