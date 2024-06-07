@@ -165,3 +165,4 @@ tmp/
 *sqlite3*
 makefile
 data/
+.vscode/
