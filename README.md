@@ -21,19 +21,11 @@
 - 存档下载
 - 饥荒容器交互(支持饥荒指令)
 
-## 镜像
-- [构建](https://github.com/leiyi2000/dontstarve-server-docker)
-  
-      https://github.com/leiyi2000/dontstarve-server-docker
-- 拉取
-
-      docker pull ylei2023/dontstarvetogether:饥荒版本号
-
-## 部署
+## 快速启动
 - 拉取项目
 
       git clone https://github.com/leiyi2000/wendy.git
-- 启动
+- 启动项目
 
       docker compose up -d
 
@@ -55,6 +47,13 @@
       
       http://127.0.0.1:8000/docs
 
+## 镜像
+- [构建](https://github.com/leiyi2000/dontstarve-server-docker)
+  
+      https://github.com/leiyi2000/dontstarve-server-docker
+- 拉取
+
+      docker pull ylei2023/dontstarvetogether:饥荒版本号
 
 ## 其他
 - 查询饥荒版本号接口
