@@ -142,15 +142,15 @@ class Cluster(BaseModel):
 
     @property
     def mods_dir(self):
-        return f"{self.id}/mods"
+        return "mods"
 
     @property
     def ugc_mods_dir(self):
-        return f"{self.id}/ugc_mods"
+        return "ugc_mods"
 
     @property
     def cluster_dir(self):
-        return f"{self.id}/Cluster_1"
+        return "Cluster_1"
 
     @classmethod
     def default(cls, id: str):

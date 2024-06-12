@@ -16,13 +16,25 @@ log = structlog.get_logger()
 docker = aiodocker.Docker(DOCKER_URL)
 
 
+def get_cluster_path(id: str) -> str:
+    """获取存档目录路径.
+
+    Args:
+        id (str): 部署ID.
+
+    Returns:
+        str: 存档目录路径
+    """
+    return os.path.join(DEPLOYMENT_PATH, id)
+
+
 async def update_mods(
     id: str,
     image: str,
     timeout: int = 30,
 ):
     container_name = f"dst_update_mods_{id}"
-    file_path = os.path.join(DEPLOYMENT_PATH, id)
+    file_path = get_cluster_path(id)
     config = {
         "Image": image,
         "RestartPolicy": {"Name": "no"},
@@ -69,7 +81,7 @@ async def deploy_world(
 ):
     name = world.name
     container_name = f"dst_{name.lower()}_{id}"
-    file_path = os.path.join(DEPLOYMENT_PATH, id)
+    file_path = get_cluster_path(id)
     config = {
         "Image": image,
         "RestartPolicy": {"Name": "always"},
