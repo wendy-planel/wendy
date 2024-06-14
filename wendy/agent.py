@@ -1,5 +1,3 @@
-from typing import List
-
 import os
 import asyncio
 
@@ -127,14 +125,13 @@ async def deploy(
     id = cluster.id
     image = await build(cluster.version)
     # 先更新模组
-    container_name = await update_mods(id, image)
-    cluster.containers.append(container_name)
+    await update_mods(id, image)
     # 部署主世界
-    container_name = await deploy_world(id, image, cluster.master)
-    cluster.containers.append(container_name)
+    master = await deploy_world(id, image, cluster.master)
+    cluster.containers.append(master)
     # 部署洞穴
-    container_name = await deploy_world(id, image, cluster.caves)
-    cluster.containers.append(container_name)
+    caves = await deploy_world(id, image, cluster.caves)
+    cluster.containers.append(caves)
 
 
 async def build(version: str) -> str:
@@ -164,53 +161,35 @@ async def stop(cluster: Cluster):
         await container.stop()
 
 
-def get_deploy_id(names: List[str]) -> str:
-    for name in names:
-        if "dst" in name:
-            return name.split("_")[-1]
-    return ""
-
-
 async def monitor():
     """当版本更新时，重新部署所有容器"""
     while True:
         try:
-            log.info("monitor dst containers")
             version = await steamcmd.dst_version()
-            containers = await docker.containers.list()
-            # 记录部署ID
-            dst = set()
-            for container in containers:
-                names = container._container.get("Names", [])
-                if deploy_id := get_deploy_id(names):
-                    dst.add(deploy_id)
-            dpy_queryset = await models.Deploy.all()
-            dpy_map = {str(dpy.id): dpy for dpy in dpy_queryset}
-            # 读取部署
-            for id in dst:
-                if id in dpy_map:
-                    dpy = dpy_map.pop(id)
-                    cluster = Cluster.model_validate(dpy.content)
-                    if dpy.status != DeployStatus.stop and cluster.version != version:
-                        cluster.version = version
-                        await deploy(cluster)
-                        dpy.status = DeployStatus.running
-                        dpy.content = cluster.model_dump()
-                        await dpy.save()
-                else:
-                    log.warning(f"deploy {id} running not managed")
-            # 未启动的容器重新启动
-            for id in dpy_map:
-                dpy = dpy_map[id]
-                if dpy.status != DeployStatus.stop:
-                    cluster = Cluster.model_validate(dpy.content)
+            async for itme in models.Deploy.filter(status=DeployStatus.running):
+                cluster = Cluster.model_validate(itme.content)
+                redeploy = False
+                id = int(cluster.id)
+                if cluster.version != version:
                     cluster.version = version
+                    redeploy = True
+                for container_name in cluster.containers:
+                    try:
+                        container = await docker.containers.get(container_name)
+                        redeploy = (
+                            container._container.get("State", {}).get("Status")
+                            != "running"
+                        )
+                    except Exception:
+                        redeploy = True
+                if redeploy:
+                    log.info(f"redeploy {id}")
                     await deploy(cluster)
-                    dpy.status = DeployStatus.running
-                    dpy.content = cluster.model_dump()
-                    await dpy.save()
+                    await models.Deploy.filter(id=id).update(
+                        content=cluster.model_dump()
+                    )
         except Exception as e:
-            log.exception(f"monitor: {e}")
+            log.exception(f"monitor error: {e}")
         finally:
             await asyncio.sleep(30 * 60)
 

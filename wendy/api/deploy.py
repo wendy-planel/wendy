@@ -68,7 +68,7 @@ async def remove(id: int):
     return await models.Deploy.filter(id=id).delete()
 
 
-@router.delete(
+@router.get(
     "/stop/{id}",
     description="停止",
 )
@@ -77,3 +77,14 @@ async def stop(id: int):
     cluster = Cluster.model_validate(deploy.content)
     await agent.stop(cluster)
     return await models.Deploy.filter(id=id).update(status=DeployStatus.stop)
+
+
+@router.get(
+    "/restart/{id}",
+    description="重启",
+)
+async def restart(id: int):
+    deploy = await models.Deploy.get(id=id)
+    cluster = Cluster.model_validate(deploy.content)
+    await agent.deploy(cluster)
+    return "ok"
