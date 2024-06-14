@@ -178,10 +178,7 @@ async def monitor():
                     try:
                         container = await docker.containers.get(container_name)
                         status = container._container.get("State", {}).get("Status")
-                        redeploy = status != "running"
-                        log.info(
-                            f"{container_name} status: {status} redeploy: {redeploy}"
-                        )
+                        redeploy |= status != "running"
                     except Exception:
                         redeploy = True
                 if redeploy:
