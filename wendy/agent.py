@@ -166,7 +166,7 @@ async def monitor():
     while True:
         try:
             version = await steamcmd.dst_version()
-            async for itme in models.Deploy.filter(status=DeployStatus.running):
+            async for itme in models.Deploy.filter(status=DeployStatus.running.value):
                 cluster = Cluster.model_validate(itme.content)
                 redeploy = False
                 id = int(cluster.id)
@@ -176,10 +176,8 @@ async def monitor():
                 for container_name in cluster.containers:
                     try:
                         container = await docker.containers.get(container_name)
-                        redeploy = (
-                            container._container.get("State", {}).get("Status")
-                            != "running"
-                        )
+                        status = container._container.get("State", {}).get("Status")
+                        redeploy = status != "running"
                     except Exception:
                         redeploy = True
                 if redeploy:

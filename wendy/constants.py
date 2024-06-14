@@ -372,7 +372,7 @@ master_leveldataoverride_default = """return {
 CLUSTER_DEFAULT = {
     "ports": [],
     "version": "",
-    "cluster_token": "pds-g^KU_QSHhEciD^XZusQbOd+Sh0wX0oMQ/n8uSXQkfN8/QLMBJrdNx5nIU=",
+    "cluster_token": "",
     "ini": {
         "game_mode": "endless",
         "max_players": 6,
