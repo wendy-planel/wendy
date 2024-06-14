@@ -1,5 +1,3 @@
-"""存档"""
-
 from typing import Literal, List
 
 import os
@@ -99,7 +97,7 @@ class ClusterIni(BaseModel):
             f"cluster_language = {self.cluster_language}\n",
             f"cluster_cloud_id = {self.cluster_cloud_id}\n",
             "\n[MISC]\n",
-            f"console_enabled = {'true' if self.lan_only_cluster else 'false'}\n",
+            f"console_enabled = {'true' if self.console_enabled else 'false'}\n",
             "\n[SHARD]\n",
             f"shard_enabled = {'true' if self.shard_enabled else 'false'}\n",
             f"bind_ip = {self.bind_ip}\n",

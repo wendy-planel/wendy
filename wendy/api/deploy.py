@@ -1,11 +1,6 @@
-import os
-import tempfile
-from zipfile import ZipFile, ZIP_DEFLATED
-
 import structlog
+from fastapi import APIRouter, Body
 from tortoise.transactions import atomic
-from fastapi import APIRouter, Body, Path
-from fastapi.responses import FileResponse
 
 from wendy.cluster import Cluster
 from wendy.constants import DeployStatus
@@ -46,7 +41,7 @@ async def create(
     # 保存游戏存档
     cluster_path = agent.get_cluster_path(id)
     cluster.save(cluster_path)
-    await agent.deploy(id, cluster)
+    await agent.deploy(cluster)
     # 更新状态
     deploy.content = cluster.model_dump()
     deploy.status = DeployStatus.running
@@ -66,9 +61,7 @@ async def reads():
     "/{id}",
     description="删除部署",
 )
-async def remove(
-    id: int = Path,
-):
+async def remove(id: int):
     deploy = await models.Deploy.get(id=id)
     cluster = Cluster.model_validate(deploy.content)
     await agent.delete(cluster)
@@ -79,32 +72,8 @@ async def remove(
     "/stop/{id}",
     description="停止",
 )
-async def stop(
-    id: int = Path,
-):
+async def stop(id: int):
     deploy = await models.Deploy.get(id=id)
     cluster = Cluster.model_validate(deploy.content)
     await agent.stop(cluster)
     return await models.Deploy.filter(id=id).update(status=DeployStatus.stop)
-
-
-@router.get(
-    "/zip/cluster/{id}",
-    description="下载存档",
-)
-async def zip(
-    id: str = Path,
-):
-    cluster_path = agent.get_cluster_path(id)
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as temp_zip_file:
-        zip_path = temp_zip_file.name
-    with ZipFile(zip_path, "w", ZIP_DEFLATED) as zip_file:
-        for root, _, files in os.walk(cluster_path):
-            for file in files:
-                file_path = os.path.join(root, file)
-                arcname = os.path.relpath(file_path, cluster_path)
-                try:
-                    zip_file.write(file_path, arcname)
-                except Exception as e:
-                    log.exception(f"zip cluster {id} error: {e}")
-    return FileResponse(zip_path, filename="cluster.zip")

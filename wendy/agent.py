@@ -28,6 +28,10 @@ def get_cluster_path(id: str) -> str:
     return os.path.join(DEPLOYMENT_PATH, id)
 
 
+def get_container_name(id: str, world: ClusterWorld) -> str:
+    return f"dst_{world.name.lower()}_{id}"
+
+
 async def update_mods(
     id: str,
     image: str,
@@ -80,7 +84,7 @@ async def deploy_world(
     world: ClusterWorld,
 ):
     name = world.name
-    container_name = f"dst_{name.lower()}_{id}"
+    container_name = get_container_name(id, world)
     file_path = get_cluster_path(id)
     config = {
         "Image": image,
@@ -106,6 +110,8 @@ async def deploy_world(
             ],
             "NetworkMode": "host",
         },
+        "Tty": True,
+        "OpenStdin": True,
     }
     container = await docker.containers.create_or_replace(
         name=container_name,
@@ -116,9 +122,9 @@ async def deploy_world(
 
 
 async def deploy(
-    id: str,
     cluster: Cluster,
 ):
+    id = cluster.id
     image = await build(cluster.version)
     # 先更新模组
     container_name = await update_mods(id, image)
@@ -187,7 +193,7 @@ async def monitor():
                     cluster = Cluster.model_validate(dpy.content)
                     if dpy.status != DeployStatus.stop and cluster.version != version:
                         cluster.version = version
-                        await deploy(id, cluster)
+                        await deploy(cluster)
                         dpy.status = DeployStatus.running
                         dpy.content = cluster.model_dump()
                         await dpy.save()
@@ -199,7 +205,7 @@ async def monitor():
                 if dpy.status != DeployStatus.stop:
                     cluster = Cluster.model_validate(dpy.content)
                     cluster.version = version
-                    await deploy(id, cluster)
+                    await deploy(cluster)
                     dpy.status = DeployStatus.running
                     dpy.content = cluster.model_dump()
                     await dpy.save()
@@ -207,3 +213,17 @@ async def monitor():
             log.exception(f"monitor: {e}")
         finally:
             await asyncio.sleep(30 * 60)
+
+
+async def attach(command: str, cluster: Cluster):
+    """控制台执行命令.
+
+    Args:
+        command (str): 命令.
+        cluster (Cluster): 存档信息.
+    """
+    container_name = get_container_name(cluster.id, cluster.master)
+    master = await docker.containers.get(container_name)
+    console = master.attach(stdout=True, stderr=True, stdin=True)
+    async with console:
+        await console.write_in(command.encode())

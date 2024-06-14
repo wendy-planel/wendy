@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from wendy.api import deploy
+from wendy.api import deploy, cluster, console
 
 
 router = APIRouter()
@@ -15,4 +15,16 @@ router.include_router(
     deploy.router,
     prefix="/deploy",
     tags=["部署"],
+)
+
+router.include_router(
+    cluster.router,
+    prefix="/cluster",
+    tags=["存档"],
+)
+
+router.include_router(
+    console.router,
+    prefix="/console",
+    tags=["控制台"],
 )
