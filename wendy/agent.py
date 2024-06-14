@@ -123,6 +123,7 @@ async def deploy(
     cluster: Cluster,
 ):
     id = cluster.id
+    cluster.containers.clear()
     image = await build(cluster.version)
     # 先更新模组
     await update_mods(id, image)
@@ -178,6 +179,9 @@ async def monitor():
                         container = await docker.containers.get(container_name)
                         status = container._container.get("State", {}).get("Status")
                         redeploy = status != "running"
+                        log.info(
+                            f"{container_name} status: {status} redeploy: {redeploy}"
+                        )
                     except Exception:
                         redeploy = True
                 if redeploy:
