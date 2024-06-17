@@ -193,14 +193,15 @@ async def monitor():
             await asyncio.sleep(30 * 60)
 
 
-async def attach(command: str, cluster: Cluster):
+async def attach(id: str, command: str, world: ClusterWorld):
     """控制台执行命令.
 
     Args:
+        id (str): 存档ID.
         command (str): 命令.
-        cluster (Cluster): 存档信息.
+        world (ClusterWorld): 世界.
     """
-    container_name = get_container_name(cluster.id, cluster.master)
+    container_name = get_container_name(id, world)
     master = await docker.containers.get(container_name)
     console = master.attach(stdout=True, stderr=True, stdin=True)
     async with console:

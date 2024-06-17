@@ -1,3 +1,5 @@
+from typing import Literal
+
 import structlog
 from fastapi import APIRouter, Body
 
@@ -15,10 +17,12 @@ log = structlog.get_logger()
 )
 async def command(
     id: int,
-    command: str = Body(..., embed=True),
+    command: str = Body(),
+    world: Literal["master", "caves"] = Body(),
 ):
     command = command.strip() + "\n"
     deploy = await models.Deploy.get(id=id)
     cluster = Cluster.model_validate(deploy.content)
-    await agent.attach(command, cluster)
+    world = cluster.master if world == "master" else cluster.caves
+    await agent.attach(cluster.id, command, world)
     return "ok"
