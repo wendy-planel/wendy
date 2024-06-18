@@ -161,10 +161,11 @@ class Cluster(BaseModel):
         ports: List[int],
         version: str,
         cluster_token: str,
-        cluster_name: str = "猪王村",
+        cluster_name: str,
         cluster_description: str = "",
         bind_ip: str = "127.0.0.1",
         master_ip: str = "127.0.0.1",
+        vote_enabled: bool = False,
     ):
         cluster = cls.default(id)
         cluster.ports = ports
@@ -178,6 +179,7 @@ class Cluster(BaseModel):
         cluster.master.ini.master_server_port = ports[5]
         cluster.master.ini.authentication_port = ports[6]
         cluster.ini.cluster_name = cluster_name
+        cluster.ini.vote_enabled = vote_enabled
         cluster.ini.cluster_description = cluster_description
         cluster.ini.bind_ip = bind_ip
         cluster.ini.master_ip = master_ip

@@ -20,6 +20,7 @@ async def create(
     cluster_token: str = Body(),
     cluster_name: str = Body(),
     cluster_description: str = Body(),
+    vote_enabled: bool = Body(default=False),
 ):
     # 获取部署版本号
     version = await steamcmd.dst_version()
@@ -37,6 +38,7 @@ async def create(
         cluster_token=cluster_token,
         cluster_name=cluster_name,
         cluster_description=cluster_description,
+        vote_enabled=vote_enabled,
     )
     # 保存游戏存档
     cluster_path = agent.get_cluster_path(id)
