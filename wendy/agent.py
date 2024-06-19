@@ -167,8 +167,8 @@ async def monitor():
     while True:
         try:
             version = await steamcmd.dst_version()
-            async for itme in models.Deploy.filter(status=DeployStatus.running.value):
-                cluster = Cluster.model_validate(itme.content)
+            async for item in models.Deploy.filter(status=DeployStatus.running.value):
+                cluster = Cluster.model_validate(item.content)
                 redeploy = False
                 id = int(cluster.id)
                 if cluster.version != version:
@@ -183,6 +183,7 @@ async def monitor():
                         redeploy = True
                 if redeploy:
                     log.info(f"redeploy {id}")
+                    # TODO ylei 等世界没人的时候才重新部署
                     await deploy(cluster)
                     await models.Deploy.filter(id=id).update(
                         content=cluster.model_dump()
