@@ -69,7 +69,6 @@ class ClusterIni(BaseModel):
     cluster_name: str
     offline_cluster: bool = False
     cluster_language: str = "zh"
-    cluster_cloud_id: str = "21F4EB2E0D00E000"
     # [MISC]
     console_enabled: bool = True
     max_snapshots: int = 1024
@@ -95,7 +94,6 @@ class ClusterIni(BaseModel):
             f"cluster_name = {self.cluster_name}\n",
             f"offline_cluster = {'true' if self.offline_cluster else 'false'}\n",
             f"cluster_language = {self.cluster_language}\n",
-            f"cluster_cloud_id = {self.cluster_cloud_id}\n",
             "\n[MISC]\n",
             f"console_enabled = {'true' if self.console_enabled else 'false'}\n",
             "\n[SHARD]\n",
