@@ -2,6 +2,8 @@ import os
 import asyncio
 
 import aiodocker
+import aiodocker.multiplexed
+import aiodocker.utils
 import structlog
 
 from wendy import models, steamcmd
@@ -203,7 +205,35 @@ async def attach(id: str, command: str, world: ClusterWorld):
         world (ClusterWorld): 世界.
     """
     container_name = get_container_name(id, world)
-    master = await docker.containers.get(container_name)
-    console = master.attach(stdout=True, stderr=True, stdin=True)
+    container = await docker.containers.get(container_name)
+    console = container.attach(stdout=True, stderr=True, stdin=True)
     async with console:
         await console.write_in(command.encode())
+
+
+async def logs(id: str, world: ClusterWorld):
+    container_name = get_container_name(id, world)
+    container = await docker.containers.get(container_name)
+    params = {"stdout": True, "stderr": False, "follow": False}
+    cm = container.docker._query(
+        "containers/{self._id}/logs".format(self=container),
+        method="GET",
+        params=params,
+    )
+    inspect_info = await container.show()
+    is_tty = inspect_info["Config"]["Tty"]
+    async with cm as response:
+        logs_stream = aiodocker.utils._DecodeHelper(
+            aiodocker.multiplexed.MultiplexedResult(response, raw=is_tty),
+            encoding="utf-8",
+        )
+        line = ""
+        async for piece in logs_stream:
+            for ch in piece:
+                if ch == "\n":
+                    yield line.strip()
+                    line = ""
+                else:
+                    line += ch
+        if line:
+            yield line.strip()

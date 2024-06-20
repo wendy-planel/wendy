@@ -71,7 +71,6 @@ class ClusterIni(BaseModel):
     cluster_language: str = "zh"
     # [MISC]
     console_enabled: bool = True
-    max_snapshots: int = 1024
     # [SHARD]
     shard_enabled: bool = True
     bind_ip: str = "127.0.0.1"
@@ -156,29 +155,46 @@ class Cluster(BaseModel):
     def create_from_default(
         cls,
         id: str,
+        bind_ip: str,
+        master_ip: str,
         ports: List[int],
         version: str,
+        game_mode: Literal["survival", "endless", "wilderness"],
+        max_players: int,
+        cluster_password: str,
         cluster_token: str,
         cluster_name: str,
-        cluster_description: str = "",
-        bind_ip: str = "127.0.0.1",
-        master_ip: str = "127.0.0.1",
-        vote_enabled: bool = False,
+        cluster_description: str,
+        vote_enabled: bool,
+        modoverrides: str,
+        caves_leveldataoverride: str,
+        master_leveldataoverride: str,
     ):
+        # 基础配置
         cluster = cls.default(id)
         cluster.ports = ports
         cluster.version = version
         cluster.cluster_token = cluster_token
-        cluster.ini.master_port = ports[0]
+        # 洞穴配置
         cluster.caves.ini.server_port = ports[1]
         cluster.caves.ini.master_server_port = ports[2]
         cluster.caves.ini.authentication_port = ports[3]
+        cluster.caves.modoverrides = modoverrides
+        cluster.caves.leveldataoverride = caves_leveldataoverride
+        # 主世界配置
         cluster.master.ini.server_port = ports[4]
         cluster.master.ini.master_server_port = ports[5]
         cluster.master.ini.authentication_port = ports[6]
+        cluster.master.modoverrides = modoverrides
+        cluster.master.leveldataoverride = master_leveldataoverride
+        # 集群配置
+        cluster.ini.bind_ip = bind_ip
+        cluster.ini.master_ip = master_ip
+        cluster.ini.master_port = ports[0]
+        cluster.ini.game_mode = game_mode
+        cluster.ini.max_players = max_players
+        cluster.ini.cluster_password = cluster_password
         cluster.ini.cluster_name = cluster_name
         cluster.ini.vote_enabled = vote_enabled
         cluster.ini.cluster_description = cluster_description
-        cluster.ini.bind_ip = bind_ip
-        cluster.ini.master_ip = master_ip
         return cluster

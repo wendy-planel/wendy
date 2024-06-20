@@ -369,6 +369,9 @@ master_leveldataoverride_default = """return {
 }"""
 
 
+modoverrides_default = "return {  }"
+
+
 CLUSTER_DEFAULT = {
     "ports": [],
     "version": "",

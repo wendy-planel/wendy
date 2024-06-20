@@ -1,5 +1,7 @@
 from typing import Literal
 
+import collections
+
 import structlog
 from fastapi import APIRouter, Body
 
@@ -26,3 +28,25 @@ async def command(
     world = cluster.master if world == "master" else cluster.caves
     await agent.attach(cluster.id, command, world)
     return "ok"
+
+
+@router.post(
+    "/logs/{id}",
+    description="获取在线日志",
+)
+async def logs(
+    id: int,
+    tail: int = Body(default=50),
+    world: Literal["master", "caves"] = Body(),
+):
+    deploy = await models.Deploy.get(id=id)
+    cluster = Cluster.model_validate(deploy.content)
+    world = cluster.master if world == "master" else cluster.caves
+    # 获取日志
+    tail += 1
+    logs = collections.deque(maxlen=tail)
+    async for line in agent.logs(cluster.id, world):
+        logs.append(line)
+        if len(logs) == tail:
+            logs.popleft()
+    return logs
