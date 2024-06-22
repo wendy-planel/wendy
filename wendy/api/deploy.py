@@ -94,6 +94,7 @@ async def update(
 ):
     deploy = await models.Deploy.get(id=id)
     cluster = Cluster.model_validate(deploy.content)
+    cluster.ports = ports
     # 更新集群配置
     cluster.cluster_token = cluster_token
     # 洞穴配置
