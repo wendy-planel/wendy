@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import List, Literal
 
 import structlog
 from fastapi import APIRouter, Body
@@ -83,6 +83,7 @@ async def update(
     max_players: int = Body(default=6),
     cluster_description: str = Body(),
     cluster_password: str = Body(default=""),
+    ports: List[int] = Body(default=[]),
     game_mode: Literal["survival", "endless", "wilderness"] = Body(default="endless"),
     bind_ip: str = Body(default="127.0.0.1"),
     master_ip: str = Body(default="127.0.0.1"),
@@ -110,6 +111,15 @@ async def update(
     cluster.ini.cluster_name = cluster_name
     cluster.ini.vote_enabled = vote_enabled
     cluster.ini.cluster_description = cluster_description
+    # 端口配置
+    if ports:
+        cluster.ini.master_port = ports[0]
+        cluster.caves.ini.server_port = ports[1]
+        cluster.caves.ini.master_server_port = ports[2]
+        cluster.caves.ini.authentication_port = ports[3]
+        cluster.master.ini.server_port = ports[4]
+        cluster.master.ini.master_server_port = ports[5]
+        cluster.master.ini.authentication_port = ports[6]
     # 保存游戏存档
     cluster.save(agent.get_cluster_path(cluster.id))
     await agent.deploy(cluster)
