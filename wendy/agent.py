@@ -145,6 +145,7 @@ async def build(version: str) -> str:
             await docker.images.inspect(tag)
             return tag
         except Exception:
+            log.info(f"开始拉取最新镜像: {tag}")
             await docker.images.pull(from_image=tag)
             await asyncio.sleep(3)
         max_retry -= 1

@@ -93,34 +93,26 @@ async def update(
     master_leveldataoverride: str = Body(default=master_leveldataoverride_default),
 ):
     deploy = await models.Deploy.get(id=id)
-    cluster = Cluster.model_validate(deploy.content)
-    cluster.ports = ports
-    # 更新集群配置
-    cluster.cluster_token = cluster_token
-    # 洞穴配置
-    cluster.caves.modoverrides = modoverrides
-    cluster.caves.leveldataoverride = caves_leveldataoverride
-    # 主世界配置
-    cluster.master.modoverrides = modoverrides
-    cluster.master.leveldataoverride = master_leveldataoverride
-    # 集群配置
-    cluster.ini.bind_ip = bind_ip
-    cluster.ini.master_ip = master_ip
-    cluster.ini.game_mode = game_mode
-    cluster.ini.max_players = max_players
-    cluster.ini.cluster_password = cluster_password
-    cluster.ini.cluster_name = cluster_name
-    cluster.ini.vote_enabled = vote_enabled
-    cluster.ini.cluster_description = cluster_description
-    # 端口配置
-    if ports:
-        cluster.ini.master_port = ports[0]
-        cluster.caves.ini.server_port = ports[1]
-        cluster.caves.ini.master_server_port = ports[2]
-        cluster.caves.ini.authentication_port = ports[3]
-        cluster.master.ini.server_port = ports[4]
-        cluster.master.ini.master_server_port = ports[5]
-        cluster.master.ini.authentication_port = ports[6]
+    version = await steamcmd.dst_version()
+    if not ports:
+        ports = [(10000 + deploy.id * 7 + i) for i in range(7)]
+    cluster = Cluster.create_from_default(
+        id=str(id),
+        bind_ip=bind_ip,
+        master_ip=master_ip,
+        ports=ports,
+        version=version,
+        game_mode=game_mode,
+        max_players=max_players,
+        cluster_password=cluster_password,
+        cluster_token=cluster_token,
+        cluster_name=cluster_name,
+        cluster_description=cluster_description,
+        vote_enabled=vote_enabled,
+        modoverrides=modoverrides,
+        caves_leveldataoverride=caves_leveldataoverride,
+        master_leveldataoverride=master_leveldataoverride,
+    )
     # 保存游戏存档
     cluster.save(agent.get_cluster_path(cluster.id))
     await agent.deploy(cluster)

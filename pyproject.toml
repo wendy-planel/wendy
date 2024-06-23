@@ -13,6 +13,7 @@ dependencies = [
     "structlog>=24.2.0",
     "tortoise-orm>=0.21.3",
     "aerich>=0.7.2",
+    "watchfiles>=0.22.0",
 ]
 requires-python = "==3.11.*"
 readme = "README.md"
