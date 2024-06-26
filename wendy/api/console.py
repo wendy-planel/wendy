@@ -3,7 +3,7 @@ from typing import Literal
 import collections
 
 import structlog
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Query
 
 from wendy import agent, models
 from wendy.cluster import Cluster
@@ -36,8 +36,8 @@ async def command(
 )
 async def logs(
     id: int,
-    tail: int = Body(default=50),
-    world: Literal["master", "caves"] = Body(),
+    tail: int = Query(default=50),
+    world: Literal["master", "caves"] = Query(),
 ):
     deploy = await models.Deploy.get(id=id)
     cluster = Cluster.model_validate(deploy.content)
