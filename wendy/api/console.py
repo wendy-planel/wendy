@@ -30,7 +30,7 @@ async def command(
     return "ok"
 
 
-@router.post(
+@router.get(
     "/logs/{id}",
     description="获取在线日志",
 )

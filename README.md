@@ -24,7 +24,7 @@
       git clone https://github.com/leiyi2000/wendy.git
 - 启动项目
 
-      docker compose up -d
+      cd wendy && docker compose up -d
 
 - 快速部署
 

@@ -130,6 +130,14 @@ async def reads():
     return await models.Deploy.all()
 
 
+@router.get(
+    "/{id}",
+    description="获取部署",
+)
+async def read(id: int):
+    return await models.Deploy.get(id=id)
+
+
 @router.delete(
     "/{id}",
     description="删除部署",
