@@ -166,6 +166,11 @@ async def stop(id: int):
 )
 async def restart(id: int):
     deploy = await models.Deploy.get(id=id)
+    version = await steamcmd.dst_version()
     cluster = Cluster.model_validate(deploy.content)
+    cluster.version = version
     await agent.deploy(cluster)
+    deploy.content = cluster.model_dump()
+    deploy.status = DeployStatus.running
+    await deploy.save()
     return "ok"
