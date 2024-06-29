@@ -53,7 +53,6 @@
       docker pull ylei2023/dontstarvetogether:饥荒版本号
 
 ## TODO
-- 存档备份
 - 上传文档开服
 
 ## 其他

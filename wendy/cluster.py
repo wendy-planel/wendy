@@ -1,5 +1,6 @@
 from typing import Literal, List
 
+import re
 import os
 
 from pydantic import BaseModel
@@ -116,10 +117,20 @@ class Cluster(BaseModel):
     version: str
     containers: List[str] = []
 
+    def save_mods_setup(self, mods_path: str):
+        mods = set(re.findall(r"workshop-([0-9]+)", self.master.modoverrides))
+        filename = "dedicated_server_mods_setup.lua"
+        if mods:
+            with open(os.path.join(mods_path, filename), "w") as file:
+                for mod_id in mods:
+                    line = f'ServerModSetup("{mod_id}")\n'
+                    file.write(line)
+
     def save(self, path: str):
         mods_path = os.path.join(path, self.mods_dir)
         if not os.path.exists(mods_path):
             os.makedirs(mods_path)
+        self.save_mods_setup(mods_path)
         ugc_mods_path = os.path.join(path, self.ugc_mods_dir)
         if not os.path.exists(ugc_mods_path):
             os.makedirs(ugc_mods_path)
