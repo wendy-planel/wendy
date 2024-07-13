@@ -9,7 +9,7 @@ import structlog
 from wendy import models, steamcmd
 from wendy.constants import DeployStatus
 from wendy.cluster import Cluster, ClusterWorld
-from wendy.settings import DOCKER_URL, DEPLOYMENT_PATH
+from wendy.settings import DOCKER_URL, DEPLOYMENT_PATH, DST_IMAGE
 
 
 log = structlog.get_logger()
@@ -138,18 +138,18 @@ async def deploy(
 
 
 async def build(version: str) -> str:
-    tag = f"ylei2023/dontstarvetogether:{version}"
+    image = DST_IMAGE + ":" + version
     max_retry = 3
     while max_retry > 0:
         try:
-            await docker.images.inspect(tag)
-            return tag
+            await docker.images.inspect(image)
+            return image
         except Exception:
-            log.info(f"开始拉取最新镜像: {tag}")
-            await docker.images.pull(from_image=tag)
+            log.info(f"开始拉取最新镜像: {image}")
+            await docker.images.pull(from_image=image)
             await asyncio.sleep(3)
         max_retry -= 1
-    raise ValueError(f"image: {tag} not found")
+    raise ValueError(f"image: {image} not found")
 
 
 async def delete(cluster: Cluster):

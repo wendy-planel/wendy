@@ -3,6 +3,7 @@ import os
 APP_NAME = "wendy"
 DEPLOYMENT_PATH = os.environ.get("DEPLOYMENT_PATH")
 DOCKER_URL = os.environ.get("DOCKER_URL", "unix:///var/run/docker.sock")
+DST_IMAGE = os.environ.get("DST_IMAGE", default="ylei2023/dontstarvetogether")
 
 
 # 数据量配置

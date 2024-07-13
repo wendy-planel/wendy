@@ -9,6 +9,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - DEPLOYMENT_PATH=${PWD}/data
+      - DST_IMAGE=${DST_IMAGE:-ylei2023/dontstarvetogether}
       - DATABASE_URL=sqlite:${PWD}/data/wendy.sqlite3
     ports:
       - "8000:8000"
