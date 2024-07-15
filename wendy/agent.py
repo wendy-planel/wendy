@@ -133,8 +133,9 @@ async def deploy(
     master = await deploy_world(id, image, cluster.master)
     cluster.containers.append(master)
     # 部署洞穴
-    caves = await deploy_world(id, image, cluster.caves)
-    cluster.containers.append(caves)
+    if cluster.enable_caves:
+        caves = await deploy_world(id, image, cluster.caves)
+        cluster.containers.append(caves)
 
 
 async def build(version: str) -> str:
