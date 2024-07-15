@@ -126,7 +126,7 @@ class Cluster(BaseModel):
                     line = f'ServerModSetup("{mod_id}")\n'
                     file.write(line)
 
-    def save(self, path: str):
+    def save(self, path: str, enable_caves: bool = True):
         mods_path = os.path.join(path, self.mods_dir)
         if not os.path.exists(mods_path):
             os.makedirs(mods_path)
@@ -143,8 +143,9 @@ class Cluster(BaseModel):
             file.write(self.cluster_token)
         # 写入主世界配置
         self.master.save(cluster_dir)
-        # 写入洞穴配置
-        self.caves.save(cluster_dir)
+        if enable_caves:
+            # 写入洞穴配置
+            self.caves.save(cluster_dir)
 
     @property
     def mods_dir(self):

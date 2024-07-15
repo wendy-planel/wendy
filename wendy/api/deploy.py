@@ -29,6 +29,7 @@ async def create(
     max_players: int = Body(default=6),
     cluster_description: str = Body(),
     cluster_password: str = Body(default=""),
+    enable_caves: bool = Body(default=True),
     game_mode: Literal["survival", "endless", "wilderness"] = Body(default="endless"),
     bind_ip: str = Body(default="127.0.0.1"),
     master_ip: str = Body(default="127.0.0.1"),
@@ -64,7 +65,7 @@ async def create(
         master_leveldataoverride=master_leveldataoverride,
     )
     # 保存游戏存档
-    cluster.save(agent.get_cluster_path(id))
+    cluster.save(agent.get_cluster_path(id), enable_caves)
     await agent.deploy(cluster)
     deploy.content = cluster.model_dump()
     deploy.status = DeployStatus.running
@@ -83,6 +84,7 @@ async def update(
     max_players: int = Body(default=6),
     cluster_description: str = Body(),
     cluster_password: str = Body(default=""),
+    enable_caves: bool = Body(default=True),
     ports: List[int] = Body(default=[]),
     game_mode: Literal["survival", "endless", "wilderness"] = Body(default="endless"),
     bind_ip: str = Body(default="127.0.0.1"),
@@ -114,6 +116,7 @@ async def update(
         master_leveldataoverride=master_leveldataoverride,
     )
     # 保存游戏存档
+    cluster.save(agent.get_cluster_path(id), enable_caves)
     cluster.save(agent.get_cluster_path(cluster.id))
     await agent.deploy(cluster)
     deploy.content = cluster.model_dump()
