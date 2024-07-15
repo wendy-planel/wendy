@@ -52,6 +52,7 @@ async def create(
         bind_ip=bind_ip,
         master_ip=master_ip,
         ports=ports,
+        enable_caves=enable_caves,
         version=version,
         game_mode=game_mode,
         max_players=max_players,
@@ -65,7 +66,7 @@ async def create(
         master_leveldataoverride=master_leveldataoverride,
     )
     # 保存游戏存档
-    cluster.save(agent.get_cluster_path(id), enable_caves)
+    cluster.save(agent.get_cluster_path(id))
     await agent.deploy(cluster)
     deploy.content = cluster.model_dump()
     deploy.status = DeployStatus.running
@@ -103,6 +104,7 @@ async def update(
         bind_ip=bind_ip,
         master_ip=master_ip,
         ports=ports,
+        enable_caves=enable_caves,
         version=version,
         game_mode=game_mode,
         max_players=max_players,
@@ -116,7 +118,7 @@ async def update(
         master_leveldataoverride=master_leveldataoverride,
     )
     # 保存游戏存档
-    cluster.save(agent.get_cluster_path(cluster.id), enable_caves)
+    cluster.save(agent.get_cluster_path(cluster.id))
     await agent.deploy(cluster)
     deploy.content = cluster.model_dump()
     deploy.status = DeployStatus.running

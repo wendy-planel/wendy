@@ -116,6 +116,7 @@ class Cluster(BaseModel):
     ports: List[int]
     version: str
     containers: List[str] = []
+    enable_caves: bool = True
 
     def save_mods_setup(self, mods_path: str):
         mods = set(re.findall(r"workshop-([0-9]+)", self.master.modoverrides))
@@ -126,7 +127,7 @@ class Cluster(BaseModel):
                     line = f'ServerModSetup("{mod_id}")\n'
                     file.write(line)
 
-    def save(self, path: str, enable_caves: bool = True):
+    def save(self, path: str):
         mods_path = os.path.join(path, self.mods_dir)
         if not os.path.exists(mods_path):
             os.makedirs(mods_path)
@@ -143,7 +144,7 @@ class Cluster(BaseModel):
             file.write(self.cluster_token)
         # 写入主世界配置
         self.master.save(cluster_dir)
-        if enable_caves:
+        if self.enable_caves:
             # 写入洞穴配置
             self.caves.save(cluster_dir)
 
@@ -170,6 +171,7 @@ class Cluster(BaseModel):
         bind_ip: str,
         master_ip: str,
         ports: List[int],
+        enable_caves: bool,
         version: str,
         game_mode: Literal["survival", "endless", "wilderness"],
         max_players: int,
@@ -185,6 +187,7 @@ class Cluster(BaseModel):
         # 基础配置
         cluster = cls.default(id)
         cluster.ports = ports
+        cluster.enable_caves = enable_caves
         cluster.version = version
         cluster.cluster_token = cluster_token
         # 洞穴配置
