@@ -116,8 +116,7 @@ async def update(
         master_leveldataoverride=master_leveldataoverride,
     )
     # 保存游戏存档
-    cluster.save(agent.get_cluster_path(id), enable_caves)
-    cluster.save(agent.get_cluster_path(cluster.id))
+    cluster.save(agent.get_cluster_path(cluster.id), enable_caves)
     await agent.deploy(cluster)
     deploy.content = cluster.model_dump()
     deploy.status = DeployStatus.running
