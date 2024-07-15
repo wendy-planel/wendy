@@ -35,7 +35,7 @@ def get_container_name(id: str, world: ClusterWorld) -> str:
 async def update_mods(
     id: str,
     image: str,
-    timeout: int = 30,
+    timeout: int = 3000,
 ):
     container_name = f"dst_update_mods_{id}"
     file_path = get_cluster_path(id)
