@@ -1,10 +1,10 @@
 import os
 import asyncio
 
-import aiodocker
-import aiodocker.multiplexed
-import aiodocker.utils
 import structlog
+import aiodocker
+import aiodocker.utils
+import aiodocker.multiplexed
 
 from wendy import models, steamcmd
 from wendy.constants import DeployStatus
@@ -62,11 +62,17 @@ async def update_mods(
             "NetworkMode": "host",
         },
     }
-    container = await docker.containers.create_or_replace(
+    try:
+        container = await docker.containers.get(container_name)
+        if container:
+            await container.delete()
+    except Exception:
+        pass
+    container = await docker.containers.create(
         name=container_name,
         config=config,
     )
-    await container.restart()
+    await container.start()
     while timeout > 0:
         container = await docker.containers.get(container_name)
         info = await container.show()
@@ -113,11 +119,17 @@ async def deploy_world(
         "Tty": True,
         "OpenStdin": True,
     }
-    container = await docker.containers.create_or_replace(
+    try:
+        container = await docker.containers.get(container_name)
+        if container:
+            await container.delete()
+    except Exception:
+        pass
+    container = await docker.containers.create(
         name=container_name,
         config=config,
     )
-    await container.restart()
+    await container.start()
     return container_name
 
 
@@ -190,7 +202,7 @@ async def monitor():
                     log.info(f"redeploy {id}")
                     await deploy(cluster)
                     await models.Deploy.filter(id=id).update(
-                        content=cluster.model_dump()
+                        content=cluster.model_dump(),
                     )
         except Exception as e:
             log.exception(f"monitor error: {e}")

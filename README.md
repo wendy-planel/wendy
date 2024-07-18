@@ -53,7 +53,7 @@
       docker pull ylei2023/dontstarvetogether:饥荒版本号
 
 ## TODO
-- 上传文档开服
+- 上传存档开服
 
 ## 其他
 - 查询饥荒版本号接口
