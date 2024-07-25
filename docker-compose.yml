@@ -5,12 +5,24 @@ services:
       dockerfile: Dockerfile
     image: wendy-apiserver:${IMAGE_TAG:-latest}
     volumes:
-      - ${PWD}/data:${PWD}/data
+      - wendy:${PWD}/data
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      - DEPLOYMENT_PATH=${PWD}/data
+      - GAME_ARCHIVE_PATH=${PWD}/data
       - DST_IMAGE=${DST_IMAGE:-ylei2023/dontstarvetogether}
       - DATABASE_URL=sqlite:${PWD}/data/wendy.sqlite3
     ports:
       - "8000:8000"
     restart: always
+
+# nfs 挂载卷，推荐
+# volumes:
+#   wendy:
+#     driver: local
+#     driver_opts:
+#       type: nfs
+#       o: addr=ip,nolock,soft,rw
+#       device: ":/xxxx"
+
+volumes:
+  wendy:

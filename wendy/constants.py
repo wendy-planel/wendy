@@ -5,7 +5,6 @@ class DeployStatus(StrEnum):
     pending = "pending"
     running = "running"
     stop = "stop"
-    exited = "exited"
 
 
 caves_leveldataoverride_default = """return {

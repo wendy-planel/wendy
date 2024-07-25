@@ -25,8 +25,7 @@ async def command(
     command = command.strip() + "\n"
     deploy = await models.Deploy.get(id=id)
     cluster = Cluster.model_validate(deploy.content)
-    world = cluster.master if world == "master" else cluster.caves
-    await agent.attach(cluster.id, command, world)
+    await agent.attach(command, world, cluster)
     return "ok"
 
 
@@ -41,11 +40,10 @@ async def logs(
 ):
     deploy = await models.Deploy.get(id=id)
     cluster = Cluster.model_validate(deploy.content)
-    world = cluster.master if world == "master" else cluster.caves
     # 获取日志
     tail += 1
     logs = collections.deque(maxlen=tail)
-    async for line in agent.logs(cluster.id, world):
+    async for line in agent.logs(world, cluster):
         logs.append(line)
         if len(logs) == tail:
             logs.popleft()

@@ -1,11 +1,12 @@
 from typing import List, Literal
 
 import structlog
-from fastapi import APIRouter, Body
 from tortoise.transactions import atomic
+from fastapi import APIRouter, Body, File, UploadFile
 
 from wendy.cluster import Cluster
 from wendy import models, agent, steamcmd
+from wendy.settings import DOCKER_URL_DEFAULT_DEFAULT
 from wendy.constants import (
     DeployStatus,
     modoverrides_default,
@@ -30,6 +31,7 @@ async def create(
     cluster_description: str = Body(),
     cluster_password: str = Body(default=""),
     enable_caves: bool = Body(default=True),
+    docker_api: str = Body(default=DOCKER_URL_DEFAULT_DEFAULT),
     game_mode: Literal["survival", "endless", "wilderness"] = Body(default="endless"),
     bind_ip: str = Body(default="127.0.0.1"),
     master_ip: str = Body(default="127.0.0.1"),
@@ -42,7 +44,7 @@ async def create(
     version = await steamcmd.dst_version()
     deploy = await models.Deploy.create(
         content={},
-        status=DeployStatus.pending,
+        status=DeployStatus.pending.value,
     )
     # 根据ID生成7个端口号
     ports = [(10000 + deploy.id * 7 + i) for i in range(7)]
@@ -53,6 +55,7 @@ async def create(
         master_ip=master_ip,
         ports=ports,
         enable_caves=enable_caves,
+        docker_api=docker_api,
         version=version,
         game_mode=game_mode,
         max_players=max_players,
@@ -65,11 +68,9 @@ async def create(
         caves_leveldataoverride=caves_leveldataoverride,
         master_leveldataoverride=master_leveldataoverride,
     )
-    # 保存游戏存档
-    cluster.save(agent.get_cluster_path(id))
     await agent.deploy(cluster)
     deploy.content = cluster.model_dump()
-    deploy.status = DeployStatus.running
+    deploy.status = DeployStatus.running.value
     await deploy.save()
     return deploy
 
@@ -86,6 +87,7 @@ async def update(
     cluster_description: str = Body(),
     cluster_password: str = Body(default=""),
     enable_caves: bool = Body(default=True),
+    docker_api: str = Body(default=DOCKER_URL_DEFAULT_DEFAULT),
     ports: List[int] = Body(default=[]),
     game_mode: Literal["survival", "endless", "wilderness"] = Body(default="endless"),
     bind_ip: str = Body(default="127.0.0.1"),
@@ -105,6 +107,7 @@ async def update(
         master_ip=master_ip,
         ports=ports,
         enable_caves=enable_caves,
+        docker_api=docker_api,
         version=version,
         game_mode=game_mode,
         max_players=max_players,
@@ -117,11 +120,9 @@ async def update(
         caves_leveldataoverride=caves_leveldataoverride,
         master_leveldataoverride=master_leveldataoverride,
     )
-    # 保存游戏存档
-    cluster.save(agent.get_cluster_path(cluster.id))
     await agent.deploy(cluster)
     deploy.content = cluster.model_dump()
-    deploy.status = DeployStatus.running
+    deploy.status = DeployStatus.running.value
     await deploy.save()
     return deploy
 
@@ -130,8 +131,10 @@ async def update(
     "",
     description="获取所有部署",
 )
-async def reads():
-    return await models.Deploy.all()
+async def reads(
+    status: DeployStatus,
+):
+    return await models.Deploy.filter(status=status.value).all()
 
 
 @router.get(
@@ -161,7 +164,7 @@ async def stop(id: int):
     deploy = await models.Deploy.get(id=id)
     cluster = Cluster.model_validate(deploy.content)
     await agent.stop(cluster)
-    return await models.Deploy.filter(id=id).update(status=DeployStatus.stop)
+    return await models.Deploy.filter(id=id).update(status=DeployStatus.stop.value)
 
 
 @router.get(
@@ -175,6 +178,18 @@ async def restart(id: int):
     cluster.version = version
     await agent.deploy(cluster)
     deploy.content = cluster.model_dump()
-    deploy.status = DeployStatus.running
+    deploy.status = DeployStatus.running.value
     await deploy.save()
     return "ok"
+
+
+@router.post("/upload", description="上传部署")
+async def upload(
+    file: UploadFile = File(),
+):
+    """上传文件部署.
+
+    Args:
+        file (UploadFile, optional): 文件.
+    """
+    pass

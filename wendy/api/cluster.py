@@ -1,12 +1,10 @@
-import os
-import tempfile
-from zipfile import ZipFile, ZIP_DEFLATED
-
+import aiodocker
 import structlog
 from fastapi import APIRouter
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 
-from wendy import agent
+from wendy import models, agent
+from wendy.cluster import Cluster
 
 
 router = APIRouter()
@@ -17,17 +15,13 @@ log = structlog.get_logger()
     "/download/{id}",
     description="下载存档",
 )
-async def zip(id: int):
-    cluster_path = agent.get_cluster_path(str(id))
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as temp_zip_file:
-        zip_path = temp_zip_file.name
-    with ZipFile(zip_path, "w", ZIP_DEFLATED) as zip_file:
-        for root, _, files in os.walk(cluster_path):
-            for file in files:
-                file_path = os.path.join(root, file)
-                arcname = os.path.relpath(file_path, cluster_path)
-                try:
-                    zip_file.write(file_path, arcname)
-                except Exception as e:
-                    log.exception(f"zip cluster {id} error: {e}")
-    return FileResponse(zip_path, filename="cluster.zip")
+async def download(id: int):
+    deploy = await models.Deploy.get(id=id)
+    cluster = Cluster.model_validate(deploy.content)
+    docker = aiodocker.Docker(cluster.docker_api)
+    tar_file = await agent.download_archive(cluster.id, docker)
+    tar_file.fileobj.seek(0)
+    return Response(
+        content=tar_file.fileobj.read(),
+        headers={"Content-Disposition": f"attachment; filename=archive_{id}.tar"},
+    )

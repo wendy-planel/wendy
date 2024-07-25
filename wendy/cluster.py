@@ -6,6 +6,7 @@ import os
 from pydantic import BaseModel
 
 from wendy.constants import CLUSTER_DEFAULT
+from wendy.settings import DOCKER_URL_DEFAULT_DEFAULT
 
 
 class ClusterServerIni(BaseModel):
@@ -113,6 +114,8 @@ class Cluster(BaseModel):
     ini: ClusterIni
     caves: ClusterWorld
     master: ClusterWorld
+    # 下面是部署相关的配置
+    docker_api: str = DOCKER_URL_DEFAULT_DEFAULT
     ports: List[int]
     version: str
     containers: List[str] = []
@@ -172,6 +175,7 @@ class Cluster(BaseModel):
         master_ip: str,
         ports: List[int],
         enable_caves: bool,
+        docker_api: str,
         version: str,
         game_mode: Literal["survival", "endless", "wilderness"],
         max_players: int,
@@ -188,6 +192,7 @@ class Cluster(BaseModel):
         cluster = cls.default(id)
         cluster.ports = ports
         cluster.enable_caves = enable_caves
+        cluster.docker_api = docker_api
         cluster.version = version
         cluster.cluster_token = cluster_token
         # 洞穴配置

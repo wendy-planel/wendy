@@ -1,10 +1,12 @@
 import os
 
 APP_NAME = "wendy"
-DEPLOYMENT_PATH = os.environ.get("DEPLOYMENT_PATH")
-DOCKER_URL = os.environ.get("DOCKER_URL", "unix:///var/run/docker.sock")
+GAME_ARCHIVE_PATH = os.environ.get("GAME_ARCHIVE_PATH")
+GAME_ARCHIVE_VOLUME = os.environ.get("GAME_ARCHIVE_VOLUME", default="wendy_dst_volume")
+DOCKER_URL_DEFAULT_DEFAULT = os.environ.get(
+    "DOCKER_URL_DEFAULT", "unix:///var/run/docker.sock"
+)
 DST_IMAGE = os.environ.get("DST_IMAGE", default="ylei2023/dontstarvetogether")
-
 
 # 数据量配置
 DATABASE_URL = os.environ.get("DATABASE_URL", default="sqlite://wendy.sqlite3")
