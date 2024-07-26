@@ -1,6 +1,13 @@
+from io import BytesIO
+import tarfile
+import tempfile
 from typing import List, Literal
 
+import os
+import zipfile
+
 import structlog
+import aiodocker
 from tortoise.transactions import atomic
 from fastapi import APIRouter, Body, File, UploadFile
 
@@ -48,9 +55,8 @@ async def create(
     )
     # 根据ID生成7个端口号
     ports = [(10000 + deploy.id * 7 + i) for i in range(7)]
-    id = str(deploy.id)
     cluster = Cluster.create_from_default(
-        id=id,
+        id=str(deploy.id),
         bind_ip=bind_ip,
         master_ip=master_ip,
         ports=ports,
@@ -183,13 +189,91 @@ async def restart(id: int):
     return "ok"
 
 
+def extract_zip(zip_content: bytes):
+    temp_dir = tempfile.mkdtemp()
+    with zipfile.ZipFile(BytesIO(zip_content), "r") as zip_ref:
+        zip_ref.extractall(temp_dir)
+    return temp_dir
+
+
+def extract_tar(tar_content: bytes):
+    temp_dir = tempfile.mkdtemp()
+    with tarfile.open(fileobj=BytesIO(tar_content), mode="r:*") as tar_ref:
+        tar_ref.extractall(temp_dir)
+    return temp_dir
+
+
+def find_directory_with_file(root_dir, target_file):
+    for dirpath, _, filenames in os.walk(root_dir):
+        if target_file in filenames:
+            return dirpath
+    return None
+
+
 @router.post("/upload", description="上传部署")
 async def upload(
     file: UploadFile = File(),
+    enable_caves: bool = Body(default=True),
+    docker_api: str = Body(default=DOCKER_URL_DEFAULT_DEFAULT),
 ):
     """上传文件部署.
 
     Args:
         file (UploadFile, optional): 文件.
     """
-    pass
+    filename = file.filename
+    file_content = await file.read(1_073_741_824)
+    # 切分上传文件后缀
+    _, suffix = os.path.splitext(filename)
+    if suffix == ".zip":
+        temp_dir = tempfile.mkdtemp()
+        with zipfile.ZipFile(BytesIO(file_content), "r") as zip_ref:
+            zip_ref.extractall(temp_dir)
+    elif suffix == ".tar":
+        temp_dir = tempfile.mkdtemp()
+        with tarfile.open(fileobj=BytesIO(file_content), mode="r:*") as tar_ref:
+            tar_ref.extractall(temp_dir)
+    else:
+        raise ValueError(f"Unsupported {suffix}")
+    target_file = "cluster.ini"
+    upload_cluster_path = None
+    for dirpath, _, filenames in os.walk(temp_dir):
+        if target_file in filenames:
+            # 类似  /tmp/tmpunk2y5rs/xx/xxxxxxx/Cluster_x
+            upload_cluster_path = dirpath
+    # 无法定位到目录
+    if upload_cluster_path is None:
+        raise ValueError(f"not found {target_file}")
+    # 对上层目录重命名
+    cluster_path = os.path.join(upload_cluster_path, os.pardir)
+    os.rename(upload_cluster_path, os.path.join(cluster_path, "Cluster_1"))
+    # 获取部署版本号
+    version = await steamcmd.dst_version()
+    deploy = await models.Deploy.create(
+        content={},
+        status=DeployStatus.pending.value,
+    )
+    # 根据ID生成7个端口号
+    ports = [(10000 + deploy.id * 7 + i) for i in range(7)]
+    id = str(deploy.id)
+    cluster = Cluster.create_from_dir(
+        id=id,
+        ports=ports,
+        version=version,
+        cluster_path=cluster_path,
+        enable_caves=enable_caves,
+        docker_api=docker_api,
+    )
+    docker = aiodocker.Docker(docker_api)
+    await agent.upload_archive(
+        id=id,
+        cluster_path=cluster_path,
+        docker=docker,
+    )
+    # 删除临时文件
+
+    await agent.deploy(cluster)
+    deploy.content = cluster.model_dump()
+    deploy.status = DeployStatus.running.value
+    await deploy.save()
+    return deploy

@@ -2,6 +2,7 @@ from typing import Literal, List
 
 import re
 import os
+import configparser
 
 from pydantic import BaseModel
 
@@ -56,6 +57,14 @@ class ClusterWorld(BaseModel):
         # 写入server.ini
         self.ini.save(path)
 
+    def update_from_file(self, file_path: str):
+        with open(
+            os.path.join(file_path, self.name, "leveldataoverride.lua"), "r"
+        ) as file:
+            self.leveldataoverride = file.read()
+        with open(os.path.join(file_path, self.name, "modoverrides.lua"), "r") as file:
+            self.modoverrides = file.read()
+
 
 class ClusterIni(BaseModel):
     # [GAMEPLAY]
@@ -106,6 +115,31 @@ class ClusterIni(BaseModel):
         ]
         with open(os.path.join(path, "cluster.ini"), "w") as file:
             file.writelines(lines)
+
+    @classmethod
+    def _parse(cls, k: str, v: str):
+        if v == "true":
+            v = True
+        elif v == "false":
+            v = False
+        int_fields = {"max_players", "master_port"}
+        if k in int_fields:
+            v = int(v)
+        return v
+
+    @classmethod
+    def load_from_file(cls, file_path: str) -> "ClusterIni":
+        config = configparser.ConfigParser()
+        config.read(file_path)
+        config = config._sections
+        data = dict()
+        data.update(config.get("GAMEPLAY", {}))
+        data.update(config.get("NETWORK", {}))
+        data.update(config.get("MISC", {}))
+        data.update(config.get("SHARD", {}))
+        for k, v in data.items():
+            data[k] = cls._parse(k, v)
+        return cls(**data)
 
 
 class Cluster(BaseModel):
@@ -187,7 +221,7 @@ class Cluster(BaseModel):
         modoverrides: str,
         caves_leveldataoverride: str,
         master_leveldataoverride: str,
-    ):
+    ) -> "Cluster":
         # 基础配置
         cluster = cls.default(id)
         cluster.ports = ports
@@ -217,4 +251,40 @@ class Cluster(BaseModel):
         cluster.ini.cluster_name = cluster_name
         cluster.ini.vote_enabled = vote_enabled
         cluster.ini.cluster_description = cluster_description
+        return cluster
+
+    @classmethod
+    def create_from_dir(
+        cls,
+        id: str,
+        ports: List[int],
+        version: str,
+        cluster_path: str,
+        enable_caves: bool,
+        docker_api: str,
+    ) -> "Cluster":
+        cluster = cls.default(id)
+        cluster.ports = ports
+        cluster.enable_caves = enable_caves
+        cluster.docker_api = docker_api
+        cluster.version = version
+        # 路径
+        cluster_path = os.path.join(cluster_path, cluster.cluster_dir)
+        # cluster_token.txt
+        with open(os.path.join(cluster_path, "cluster_token.txt")) as file:
+            cluster.cluster_token = file.read()
+        # 洞穴配置
+        cluster.caves.ini.server_port = ports[1]
+        cluster.caves.ini.master_server_port = ports[2]
+        cluster.caves.ini.authentication_port = ports[3]
+        cluster.caves.update_from_file(cluster_path)
+        # 主世界配置
+        cluster.master.ini.server_port = ports[4]
+        cluster.master.ini.master_server_port = ports[5]
+        cluster.master.ini.authentication_port = ports[6]
+        cluster.master.update_from_file(cluster_path)
+        # 集群配置
+        cluster_ini_path = os.path.join(cluster_path, "cluster.ini")
+        cluster.ini = ClusterIni.load_from_file(cluster_ini_path)
+        cluster.ini.master_port = ports[0]
         return cluster
