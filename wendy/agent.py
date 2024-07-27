@@ -365,7 +365,7 @@ async def logs(
     params = {
         "stdout": True,
         "stderr": False,
-        "follow": True,
+        "follow": False,
     }
     cm = container.docker._query(
         "containers/{self._id}/logs".format(self=container),
