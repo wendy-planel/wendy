@@ -1,7 +1,7 @@
 from io import BytesIO
 import tarfile
 import tempfile
-from typing import List, Literal
+from typing import Literal
 
 import os
 import zipfile
@@ -93,8 +93,6 @@ async def update(
     cluster_description: str = Body(),
     cluster_password: str = Body(default=""),
     enable_caves: bool = Body(default=True),
-    docker_api: str = Body(default=DOCKER_URL_DEFAULT_DEFAULT),
-    ports: List[int] = Body(default=[]),
     game_mode: Literal["survival", "endless", "wilderness"] = Body(default="endless"),
     bind_ip: str = Body(default="127.0.0.1"),
     master_ip: str = Body(default="127.0.0.1"),
@@ -104,16 +102,15 @@ async def update(
     master_leveldataoverride: str = Body(default=master_leveldataoverride_default),
 ):
     deploy = await models.Deploy.get(id=id)
+    cluster = Cluster.model_validate(deploy.content)
     version = await steamcmd.dst_version()
-    if not ports:
-        ports = [(10000 + deploy.id * 7 + i) for i in range(7)]
     cluster = Cluster.create_from_default(
         id=str(id),
         bind_ip=bind_ip,
         master_ip=master_ip,
-        ports=ports,
+        ports=cluster.ports,
         enable_caves=enable_caves,
-        docker_api=docker_api,
+        docker_api=cluster.docker_api,
         version=version,
         game_mode=game_mode,
         max_players=max_players,
@@ -187,27 +184,6 @@ async def restart(id: int):
     deploy.status = DeployStatus.running.value
     await deploy.save()
     return "ok"
-
-
-def extract_zip(zip_content: bytes):
-    temp_dir = tempfile.mkdtemp()
-    with zipfile.ZipFile(BytesIO(zip_content), "r") as zip_ref:
-        zip_ref.extractall(temp_dir)
-    return temp_dir
-
-
-def extract_tar(tar_content: bytes):
-    temp_dir = tempfile.mkdtemp()
-    with tarfile.open(fileobj=BytesIO(tar_content), mode="r:*") as tar_ref:
-        tar_ref.extractall(temp_dir)
-    return temp_dir
-
-
-def find_directory_with_file(root_dir, target_file):
-    for dirpath, _, filenames in os.walk(root_dir):
-        if target_file in filenames:
-            return dirpath
-    return None
 
 
 @router.post("/upload", description="上传部署")
