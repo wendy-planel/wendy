@@ -240,14 +240,13 @@ async def upload(
         enable_caves=enable_caves,
         docker_api=docker_api,
     )
-    docker = aiodocker.Docker(docker_api)
-    await agent.upload_archive(
-        id=id,
-        cluster_path=cluster_path,
-        docker=docker,
-    )
+    async with aiodocker.Docker(cluster.docker_api) as docker:
+        await agent.upload_archive(
+            id=id,
+            cluster_path=cluster_path,
+            docker=docker,
+        )
     # 删除临时文件
-
     await agent.deploy(cluster)
     deploy.content = cluster.model_dump()
     deploy.status = DeployStatus.running.value

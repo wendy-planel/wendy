@@ -12,7 +12,11 @@ import aiodocker.multiplexed
 from wendy.cluster import Cluster
 from wendy import models, steamcmd
 from wendy.constants import DeployStatus
-from wendy.settings import GAME_ARCHIVE_VOLUME, GAME_ARCHIVE_PATH, DST_IMAGE
+from wendy.settings import (
+    DST_IMAGE,
+    GAME_ARCHIVE_PATH,
+    GAME_ARCHIVE_VOLUME,
+)
 
 
 log = structlog.get_logger()
@@ -147,38 +151,31 @@ async def update_mods(
     timeout: int = 3000,
 ):
     container_name = f"dst_update_mods_{id}"
+    # 不是很好的解决办法
+    volumes = await docker.volumes.list()
+    mount_point = None
+    for item in volumes:
+        if item["Name"] == volume:
+            mount_point = item["Mountpoint"]
+    if mount_point is None:
+        return
     config = {
         "Image": image,
         "RestartPolicy": {"Name": "no"},
         "Cmd": [
             "-only_update_server_mods",
             "-ugc_directory",
-            "/home/steam/dst/archive/ugc_mods",
-            "-persistent_storage_root",
-            "/home/steam/dst",
-            "-conf_dir",
-            "archive",
-            "-cluster",
-            "Cluster_1",
+            "/home/steam/dst/game/ugc_mods",
         ],
         "HostConfig": {
-            "Mounts": [
-                {
-                    "Type": "volume",
-                    "Source": volume,
-                    "Target": "/home/steam/dst/archive",
-                }
+            "Binds": [
+                f"{mount_point}/mods:/home/steam/dst/game/mods",
+                f"{mount_point}/ugc_mods:/home/steam/dst/game/ugc_mods",
             ],
             "NetworkMode": "host",
         },
     }
-    try:
-        container = await docker.containers.get(container_name)
-        if container:
-            await container.delete()
-    except Exception:
-        pass
-    container = await docker.containers.create(
+    container = await docker.containers.create_or_replace(
         name=container_name,
         config=config,
     )
@@ -231,14 +228,7 @@ async def deploy_world(
         "Tty": True,
         "OpenStdin": True,
     }
-    # 重新部署时, 上传配置文件改变了文件的inode导致修改配置失效
-    try:
-        container = await docker.containers.get(container_name)
-        if container:
-            await container.delete()
-    except Exception:
-        pass
-    container = await docker.containers.create(
+    container = await docker.containers.create_or_replace(
         name=container_name,
         config=config,
     )
@@ -247,26 +237,26 @@ async def deploy_world(
 
 
 async def deploy(cluster: Cluster):
-    id = cluster.id
-    cluster.containers.clear()
-    image = DST_IMAGE + ":" + cluster.version
-    docker = aiodocker.Docker(cluster.docker_api)
-    # 拉取镜像
-    await pull(image, docker)
-    # 生成存档配置
-    cluster_path = get_cluster_path(cluster.id)
-    cluster.save(cluster_path)
-    # 上传存档到挂载卷
-    volume = await upload_archive(cluster.id, cluster_path, docker)
-    # 更新模组
-    await update_mods(id, image, volume, docker)
-    # 部署主世界
-    master = await deploy_world(id, image, volume, docker, cluster.master.name)
-    cluster.containers.append(master)
-    # 部署洞穴
-    if cluster.enable_caves:
-        caves = await deploy_world(id, image, volume, docker, cluster.caves.name)
-        cluster.containers.append(caves)
+    async with aiodocker.Docker(cluster.docker_api) as docker:
+        id = cluster.id
+        cluster.containers.clear()
+        image = DST_IMAGE + ":" + cluster.version
+        # 拉取镜像
+        await pull(image, docker)
+        # 生成存档配置
+        cluster_path = get_cluster_path(cluster.id)
+        cluster.save(cluster_path)
+        # 上传存档到挂载卷
+        volume = await upload_archive(cluster.id, cluster_path, docker)
+        # 更新模组
+        await update_mods(id, image, volume, docker)
+        # 部署主世界
+        master = await deploy_world(id, image, volume, docker, cluster.master.name)
+        cluster.containers.append(master)
+        # 部署洞穴
+        if cluster.enable_caves:
+            caves = await deploy_world(id, image, volume, docker, cluster.caves.name)
+            cluster.containers.append(caves)
 
 
 async def pull(image: str, docker: aiodocker.Docker) -> str:
@@ -283,56 +273,58 @@ async def pull(image: str, docker: aiodocker.Docker) -> str:
 
 
 async def delete(cluster: Cluster):
-    docker = aiodocker.Docker(cluster.docker_api)
-    for name in cluster.containers:
-        try:
-            container = await docker.containers.get(name)
-            await container.stop()
-            await container.delete()
-        except Exception:
-            pass
+    async with aiodocker.Docker(cluster.docker_api) as docker:
+        for name in cluster.containers:
+            try:
+                container = await docker.containers.get(name)
+                await container.stop()
+                await container.delete()
+            except Exception:
+                pass
 
 
 async def stop(cluster: Cluster):
-    docker = aiodocker.Docker(cluster.docker_api)
-    for name in cluster.containers:
-        try:
-            container = await docker.containers.get(name)
-            await container.stop()
-        except Exception:
-            pass
+    async with aiodocker.Docker(cluster.docker_api) as docker:
+        for name in cluster.containers:
+            try:
+                container = await docker.containers.get(name)
+                await container.stop()
+            except Exception:
+                pass
 
 
 async def monitor():
     """当版本更新时，重新部署所有容器"""
     while True:
         try:
-            version = await steamcmd.dst_version()
-            log.info(f"[monitor] 最新镜像: {version}")
-            async for item in models.Deploy.filter(status=DeployStatus.running.value):
+            async for item in models.Deploy.filter(
+                status=DeployStatus.running.value,
+            ):
                 cluster = Cluster.model_validate(item.content)
-                docker = aiodocker.Docker(cluster.docker_api)
-                redeploy = False
-                if cluster.version != version:
-                    cluster.version = version
-                    redeploy = True
-                for container_name in cluster.containers:
-                    try:
-                        container = await docker.containers.get(container_name)
-                        status = container._container.get("State", {}).get("Status")
-                        redeploy |= status != "running"
-                    except Exception:
+                async with aiodocker.Docker(cluster.docker_api) as docker:
+                    version = await steamcmd.dst_version()
+                    log.info(f"[monitor] 最新镜像: {version}")
+                    redeploy = False
+                    if cluster.version != version:
+                        cluster.version = version
                         redeploy = True
-                if redeploy:
-                    log.info(f"redeploy {cluster.id}")
-                    await deploy(cluster)
-                    await models.Deploy.filter(id=int(cluster.id)).update(
-                        content=cluster.model_dump(),
-                    )
+                    for container_name in cluster.containers:
+                        try:
+                            container = await docker.containers.get(container_name)
+                            status = container._container.get("State", {}).get("Status")
+                            redeploy |= status != "running"
+                        except Exception:
+                            redeploy = True
+                    if redeploy:
+                        log.info(f"redeploy {cluster.id}")
+                        await deploy(cluster)
+                        await models.Deploy.filter(id=int(cluster.id)).update(
+                            content=cluster.model_dump(),
+                        )
         except Exception as e:
             log.exception(f"monitor error: {e}")
         finally:
-            await asyncio.sleep(30 * 60)
+            await asyncio.sleep(60 * 60)
 
 
 async def attach(
@@ -348,11 +340,11 @@ async def attach(
         cluster (Cluster): 存档.
     """
     container_name = get_container_name(cluster.id, world)
-    docker = aiodocker.Docker(cluster.docker_api)
-    container = await docker.containers.get(container_name)
-    console = container.attach(stdout=True, stderr=True, stdin=True)
-    async with console:
-        await console.write_in(command.encode())
+    async with aiodocker.Docker(cluster.docker_api) as docker:
+        container = await docker.containers.get(container_name)
+        console = container.attach(stdout=True, stderr=True, stdin=True)
+        async with console:
+            await console.write_in(command.encode())
 
 
 async def logs(
@@ -360,32 +352,32 @@ async def logs(
     cluster: Cluster,
 ):
     container_name = get_container_name(cluster.id, world)
-    docker = aiodocker.Docker(cluster.docker_api)
-    container = await docker.containers.get(container_name)
-    params = {
-        "stdout": True,
-        "stderr": False,
-        "follow": False,
-    }
-    cm = container.docker._query(
-        "containers/{self._id}/logs".format(self=container),
-        method="GET",
-        params=params,
-    )
-    inspect_info = await container.show()
-    is_tty = inspect_info["Config"]["Tty"]
-    async with cm as response:
-        logs_stream = aiodocker.utils._DecodeHelper(
-            aiodocker.multiplexed.MultiplexedResult(response, raw=is_tty),
-            encoding="utf-8",
+    async with aiodocker.Docker(cluster.docker_api) as docker:
+        container = await docker.containers.get(container_name)
+        params = {
+            "stdout": True,
+            "stderr": False,
+            "follow": False,
+        }
+        cm = container.docker._query(
+            "containers/{self._id}/logs".format(self=container),
+            method="GET",
+            params=params,
         )
-        line = ""
-        async for piece in logs_stream:
-            for ch in piece:
-                if ch == "\n":
-                    yield line.strip()
-                    line = ""
-                else:
-                    line += ch
-        if line:
-            yield line.strip()
+        inspect_info = await container.show()
+        is_tty = inspect_info["Config"]["Tty"]
+        async with cm as response:
+            logs_stream = aiodocker.utils._DecodeHelper(
+                aiodocker.multiplexed.MultiplexedResult(response, raw=is_tty),
+                encoding="utf-8",
+            )
+            line = ""
+            async for piece in logs_stream:
+                for ch in piece:
+                    if ch == "\n":
+                        yield line.strip()
+                        line = ""
+                    else:
+                        line += ch
+            if line:
+                yield line.strip()

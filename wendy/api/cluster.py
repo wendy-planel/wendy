@@ -18,8 +18,8 @@ log = structlog.get_logger()
 async def download(id: int):
     deploy = await models.Deploy.get(id=id)
     cluster = Cluster.model_validate(deploy.content)
-    docker = aiodocker.Docker(cluster.docker_api)
-    tar_file = await agent.download_archive(cluster.id, docker)
+    async with aiodocker.Docker(cluster.docker_api) as docker:
+        tar_file = await agent.download_archive(cluster.id, docker)
     tar_file.fileobj.seek(0)
     return Response(
         content=tar_file.fileobj.read(),
