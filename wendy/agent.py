@@ -154,7 +154,7 @@ async def update_mods(
     # 不是很好的解决办法
     volumes = await docker.volumes.list()
     mount_point = None
-    for item in volumes:
+    for item in volumes["Volumes"]:
         if item["Name"] == volume:
             mount_point = item["Mountpoint"]
     if mount_point is None:
