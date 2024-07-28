@@ -297,12 +297,12 @@ async def monitor():
     """当版本更新时，重新部署所有容器"""
     while True:
         try:
+            version = await steamcmd.dst_version()
             async for item in models.Deploy.filter(
                 status=DeployStatus.running.value,
             ):
                 cluster = Cluster.model_validate(item.content)
                 async with aiodocker.Docker(cluster.docker_api) as docker:
-                    version = await steamcmd.dst_version()
                     log.info(f"[monitor] 最新镜像: {version}")
                     redeploy = False
                     if cluster.version != version:
