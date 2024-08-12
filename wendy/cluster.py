@@ -23,10 +23,10 @@ class ClusterWorld(BaseModel):
     name: str
     is_master: bool
     # [NETWORK]
-    server_port: int
+    server_port: int = -1
     # [STEAM]
-    master_server_port: int
-    authentication_port: int
+    master_server_port: int = -1
+    authentication_port: int = -1
     # [ACCOUNT]
     encode_user_path: bool = True
     # 部署配置
@@ -62,6 +62,30 @@ class ClusterWorld(BaseModel):
         ]
         with open(os.path.join(path, "server.ini"), "w") as file:
             file.writelines(lines)
+
+    @classmethod
+    def load_from_file(
+        cls,
+        path: str,
+        type: Literal["Master", "Caves"],
+        docker_api: str,
+    ) -> "ClusterWorld":
+        path = os.path.join(path, type)
+        with open(os.path.join(path, "leveldataoverride.lua"), "r") as file:
+            leveldataoverride = file.read()
+        with open(os.path.join(path, "modoverrides.lua"), "r") as file:
+            modoverrides = file.read()
+        is_master = type == "Master"
+        id = "1" if is_master else "2"
+        return cls(
+            leveldataoverride=leveldataoverride,
+            modoverrides=modoverrides,
+            id=id,
+            name=type,
+            is_master=is_master,
+            type=type,
+            docker_api=docker_api,
+        )
 
 
 class ClusterIni(BaseModel):
@@ -171,13 +195,14 @@ class Cluster(BaseModel):
     ]
 
     def save_mods_setup(self, mods_path: str):
-        mods = set(re.findall(r"workshop-([0-9]+)", self.master.modoverrides))
-        filename = "dedicated_server_mods_setup.lua"
-        if mods:
-            with open(os.path.join(mods_path, filename), "w") as file:
-                for mod_id in mods:
-                    line = f'ServerModSetup("{mod_id}")\n'
-                    file.write(line)
+        for world in self.world:
+            mods = set(re.findall(r"workshop-([0-9]+)", world.modoverrides))
+            filename = "dedicated_server_mods_setup.lua"
+            if mods:
+                with open(os.path.join(mods_path, filename), "w") as file:
+                    for mod_id in mods:
+                        line = f'ServerModSetup("{mod_id}")\n'
+                        file.write(line)
 
     def save(self, path: str):
         mods_path = os.path.join(path, self.mods_dir)
@@ -216,4 +241,13 @@ class Cluster(BaseModel):
         cluster_path: str,
         docker_api: str,
     ) -> "Cluster":
-        pass
+        with open(os.path.join(cluster_path, "cluster_token.txt"), "r") as file:
+            cluster_token = file.read()
+        ini = ClusterIni.load_from_file(os.path.join(cluster_path, "cluster.ini"))
+        master = ClusterWorld.load_from_file(cluster_path, "Master", docker_api)
+        caves = ClusterWorld.load_from_file(cluster_path, "Caves", docker_api)
+        return cls(
+            cluster_token=cluster_token,
+            ini=ini,
+            world=[master, caves],
+        )

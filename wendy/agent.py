@@ -269,6 +269,7 @@ async def deploy(
             await update_mods(id, image, volume, docker)
             # 部署世界
             world.container = await deploy_world(id, image, volume, docker, world.type)
+            world.version = version
     return cluster
 
 
@@ -279,6 +280,7 @@ async def pull(image: str, docker: aiodocker.Docker) -> str:
             await docker.images.inspect(image)
             return image
         except Exception:
+            log.info(f"拉取镜像：{image}")
             await docker.images.pull(from_image=image)
             await asyncio.sleep(3)
         max_retry -= 1

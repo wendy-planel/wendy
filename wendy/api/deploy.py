@@ -1,4 +1,5 @@
 import os
+import shutil
 import zipfile
 import tarfile
 import tempfile
@@ -136,26 +137,30 @@ async def upload(
     else:
         raise ValueError(f"Unsupported {suffix}")
     target_file = "cluster.ini"
-    upload_cluster_path = None
+    cluster_path = None
     for dirpath, _, filenames in os.walk(temp_dir):
         if target_file in filenames:
             # 类似  /tmp/tmpunk2y5rs/xx/xxxxxxx/Cluster_x
-            upload_cluster_path = dirpath
+            cluster_path = dirpath
     # 无法定位到目录
-    if upload_cluster_path is None:
+    if cluster_path is None:
         raise ValueError(f"not found {target_file}")
-    # 对上层目录重命名
-    cluster_path = os.path.join(upload_cluster_path, os.pardir)
-    os.rename(upload_cluster_path, os.path.join(cluster_path, "Cluster_1"))
-    cluster = Cluster.create_from_dir(cluster_path, docker_api)
+    cluster = Cluster.create_from_dir(
+        cluster_path,
+        docker_api,
+    )
     deploy = await models.Deploy.create(
-        content=cluster.model_dump(),
+        cluster=cluster.model_dump(),
         status=DeployStatus.pending.value,
     )
-    async with aiodocker.Docker(cluster.docker_api) as docker:
+    # 读取当前
+    parent_directory = os.path.dirname(cluster_path)
+    rename_cluster_path = os.path.join(parent_directory, "Cluster_1")
+    shutil.move(cluster_path, rename_cluster_path)
+    async with aiodocker.Docker(docker_api) as docker:
         await agent.upload_archive(
             id=deploy.id,
-            cluster_path=cluster_path,
+            cluster_path=parent_directory,
             docker=docker,
         )
     await agent.deploy(deploy.id, cluster)

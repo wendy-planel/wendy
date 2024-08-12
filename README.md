@@ -63,7 +63,7 @@
       https://github.com/leiyi2000/dontstarve-server-docker
 
 ## TODO
-- qwq
+- 模组自动更新
 
 ## 其他
 - 查询饥荒版本号接口
