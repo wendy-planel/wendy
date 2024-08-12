@@ -1,6 +1,5 @@
-import aiodocker
 import structlog
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import Response
 
 from wendy import models, agent
@@ -15,11 +14,20 @@ log = structlog.get_logger()
     "/download/{id}",
     description="下载存档",
 )
-async def download(id: int):
+async def download(
+    id: int,
+    world_name: str = Query(default="Master"),
+):
     deploy = await models.Deploy.get(id=id)
-    cluster = Cluster.model_validate(deploy.content)
-    async with aiodocker.Docker(cluster.docker_api) as docker:
-        tar_file = await agent.download_archive(cluster.id, docker)
+    cluster = Cluster.model_validate(deploy.cluster)
+    container_name = docker_api = None
+    for world in cluster.world:
+        if world.name == world_name:
+            docker_api = world.docker_api
+            container_name = world.container
+    if docker_api is None:
+        raise ValueError(f"world {world_name} not found")
+    tar_file = await agent.download_archive(docker_api, container_name)
     tar_file.fileobj.seek(0)
     return Response(
         content=tar_file.fileobj.read(),

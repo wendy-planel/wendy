@@ -6,12 +6,21 @@ import configparser
 
 from pydantic import BaseModel
 
-from wendy.constants import CLUSTER_DEFAULT
-from wendy.settings import DOCKER_URL_DEFAULT_DEFAULT
+from wendy.settings import DOCKER_API_DEFAULT
+from wendy.constants import (
+    modoverrides_default,
+    caves_leveldataoverride_default,
+    master_leveldataoverride_default,
+)
 
 
-class ClusterServerIni(BaseModel):
+class ClusterWorld(BaseModel):
+    leveldataoverride: str
+    modoverrides: str
+    # server.ini文件配置内容
     # [SHARD]
+    id: str
+    name: str
     is_master: bool
     # [NETWORK]
     server_port: int
@@ -20,28 +29,11 @@ class ClusterServerIni(BaseModel):
     authentication_port: int
     # [ACCOUNT]
     encode_user_path: bool = True
-
-    def save(self, path: str):
-        lines = [
-            "[SHARD]\n",
-            f"is_master = {'true' if self.is_master else 'false'}\n",
-            "\n[NETWORK]\n",
-            f"server_port = {self.server_port}\n",
-            "\n[STEAM]\n",
-            f"master_server_port = {self.master_server_port}\n",
-            f"authentication_port = {self.authentication_port}\n",
-            "\n[ACCOUNT]\n",
-            f"encode_user_path = {'true' if self.encode_user_path else 'false'}\n",
-        ]
-        with open(os.path.join(path, "server.ini"), "w") as file:
-            file.writelines(lines)
-
-
-class ClusterWorld(BaseModel):
-    leveldataoverride: str
-    modoverrides: str
-    ini: ClusterServerIni
-    name: Literal["Master", "Caves"]
+    # 部署配置
+    type: Literal["Master", "Caves"]
+    version: str = ""
+    docker_api: str
+    container: str = ""
 
     def save(self, path: str):
         path = os.path.join(path, self.name)
@@ -55,15 +47,21 @@ class ClusterWorld(BaseModel):
         with open(os.path.join(path, "modoverrides.lua"), "w") as file:
             file.write(self.modoverrides)
         # 写入server.ini
-        self.ini.save(path)
-
-    def update_from_file(self, file_path: str):
-        with open(
-            os.path.join(file_path, self.name, "leveldataoverride.lua"), "r"
-        ) as file:
-            self.leveldataoverride = file.read()
-        with open(os.path.join(file_path, self.name, "modoverrides.lua"), "r") as file:
-            self.modoverrides = file.read()
+        lines = [
+            "[SHARD]\n",
+            f"id = {self.id}\n",
+            f"name = {self.name}\n",
+            f"is_master = {'true' if self.is_master else 'false'}\n",
+            "\n[NETWORK]\n",
+            f"server_port = {self.server_port}\n",
+            "\n[STEAM]\n",
+            f"master_server_port = {self.master_server_port}\n",
+            f"authentication_port = {self.authentication_port}\n",
+            "\n[ACCOUNT]\n",
+            f"encode_user_path = {'true' if self.encode_user_path else 'false'}\n",
+        ]
+        with open(os.path.join(path, "server.ini"), "w") as file:
+            file.writelines(lines)
 
 
 class ClusterIni(BaseModel):
@@ -143,17 +141,34 @@ class ClusterIni(BaseModel):
 
 
 class Cluster(BaseModel):
-    id: str
     cluster_token: str
-    ini: ClusterIni
-    caves: ClusterWorld
-    master: ClusterWorld
-    # 下面是部署相关的配置
-    docker_api: str = DOCKER_URL_DEFAULT_DEFAULT
-    ports: List[int]
-    version: str
-    containers: List[str] = []
-    enable_caves: bool = True
+    ini: ClusterIni = ClusterIni(cluster_name="Wendy Cute", master_port=10888)
+    world: List[ClusterWorld] = [
+        ClusterWorld(
+            id="1",
+            name="Master",
+            type="Master",
+            leveldataoverride=master_leveldataoverride_default,
+            modoverrides=modoverrides_default,
+            is_master=True,
+            server_port=10999,
+            master_server_port=27016,
+            authentication_port=8766,
+            docker_api=DOCKER_API_DEFAULT,
+        ),
+        ClusterWorld(
+            id="2",
+            name="Caves",
+            type="Caves",
+            is_master=False,
+            server_port=10999,
+            master_server_port=27017,
+            authentication_port=8767,
+            docker_api=DOCKER_API_DEFAULT,
+            modoverrides=modoverrides_default,
+            leveldataoverride=caves_leveldataoverride_default,
+        ),
+    ]
 
     def save_mods_setup(self, mods_path: str):
         mods = set(re.findall(r"workshop-([0-9]+)", self.master.modoverrides))
@@ -179,11 +194,9 @@ class Cluster(BaseModel):
         # 写入cluster_token.txt
         with open(os.path.join(cluster_dir, "cluster_token.txt"), "w") as file:
             file.write(self.cluster_token)
-        # 写入主世界配置
-        self.master.save(cluster_dir)
-        if self.enable_caves:
-            # 写入洞穴配置
-            self.caves.save(cluster_dir)
+        # 世界配置
+        for world in self.world:
+            world.save(cluster_dir)
 
     @property
     def mods_dir(self):
@@ -198,93 +211,9 @@ class Cluster(BaseModel):
         return "Cluster_1"
 
     @classmethod
-    def default(cls, id: str):
-        return cls(id=id, **CLUSTER_DEFAULT)
-
-    @classmethod
-    def create_from_default(
-        cls,
-        id: str,
-        bind_ip: str,
-        master_ip: str,
-        ports: List[int],
-        enable_caves: bool,
-        docker_api: str,
-        version: str,
-        game_mode: Literal["survival", "endless", "wilderness"],
-        max_players: int,
-        cluster_password: str,
-        cluster_token: str,
-        cluster_name: str,
-        cluster_description: str,
-        vote_enabled: bool,
-        modoverrides: str,
-        caves_leveldataoverride: str,
-        master_leveldataoverride: str,
-    ) -> "Cluster":
-        # 基础配置
-        cluster = cls.default(id)
-        cluster.ports = ports
-        cluster.enable_caves = enable_caves
-        cluster.docker_api = docker_api
-        cluster.version = version
-        cluster.cluster_token = cluster_token
-        # 洞穴配置
-        cluster.caves.ini.server_port = ports[1]
-        cluster.caves.ini.master_server_port = ports[2]
-        cluster.caves.ini.authentication_port = ports[3]
-        cluster.caves.modoverrides = modoverrides
-        cluster.caves.leveldataoverride = caves_leveldataoverride
-        # 主世界配置
-        cluster.master.ini.server_port = ports[4]
-        cluster.master.ini.master_server_port = ports[5]
-        cluster.master.ini.authentication_port = ports[6]
-        cluster.master.modoverrides = modoverrides
-        cluster.master.leveldataoverride = master_leveldataoverride
-        # 集群配置
-        cluster.ini.bind_ip = bind_ip
-        cluster.ini.master_ip = master_ip
-        cluster.ini.master_port = ports[0]
-        cluster.ini.game_mode = game_mode
-        cluster.ini.max_players = max_players
-        cluster.ini.cluster_password = cluster_password
-        cluster.ini.cluster_name = cluster_name
-        cluster.ini.vote_enabled = vote_enabled
-        cluster.ini.cluster_description = cluster_description
-        return cluster
-
-    @classmethod
     def create_from_dir(
         cls,
-        id: str,
-        ports: List[int],
-        version: str,
         cluster_path: str,
-        enable_caves: bool,
         docker_api: str,
     ) -> "Cluster":
-        cluster = cls.default(id)
-        cluster.ports = ports
-        cluster.enable_caves = enable_caves
-        cluster.docker_api = docker_api
-        cluster.version = version
-        # 路径
-        cluster_path = os.path.join(cluster_path, cluster.cluster_dir)
-        # cluster_token.txt
-        with open(os.path.join(cluster_path, "cluster_token.txt")) as file:
-            cluster.cluster_token = file.read()
-        # 洞穴配置
-        cluster.caves.ini.server_port = ports[1]
-        cluster.caves.ini.master_server_port = ports[2]
-        cluster.caves.ini.authentication_port = ports[3]
-        cluster.caves.update_from_file(cluster_path)
-        # 主世界配置
-        cluster.master.ini.server_port = ports[4]
-        cluster.master.ini.master_server_port = ports[5]
-        cluster.master.ini.authentication_port = ports[6]
-        cluster.master.update_from_file(cluster_path)
-        # 集群配置
-        cluster_ini_path = os.path.join(cluster_path, "cluster.ini")
-        cluster.ini = ClusterIni.load_from_file(cluster_ini_path)
-        cluster.ini.master_port = ports[0]
-        return cluster
+        pass

@@ -1,5 +1,3 @@
-from typing import Literal
-
 import collections
 
 import structlog
@@ -20,12 +18,19 @@ log = structlog.get_logger()
 async def command(
     id: int,
     command: str = Body(),
-    world: Literal["master", "caves"] = Body(),
+    world_name: str = Body(default="Master"),
 ):
     command = command.strip() + "\n"
     deploy = await models.Deploy.get(id=id)
-    cluster = Cluster.model_validate(deploy.content)
-    await agent.attach(command, world, cluster)
+    cluster = Cluster.model_validate(deploy.cluster)
+    container_name = docker_api = None
+    for world in cluster.world:
+        if world.name == world_name:
+            docker_api = world.docker_api
+            container_name = world.container
+    if docker_api is None:
+        raise ValueError(f"world {world_name} not found")
+    await agent.attach(command, docker_api, container_name)
     return "ok"
 
 
@@ -36,14 +41,21 @@ async def command(
 async def logs(
     id: int,
     tail: int = Query(default=50),
-    world: Literal["master", "caves"] = Query(),
+    world_name: str = Query(default="Master"),
 ):
     deploy = await models.Deploy.get(id=id)
-    cluster = Cluster.model_validate(deploy.content)
+    cluster = Cluster.model_validate(deploy.cluster)
+    container_name = docker_api = None
+    for world in cluster.world:
+        if world.name == world_name:
+            docker_api = world.docker_api
+            container_name = world.container
+    if docker_api is None:
+        raise ValueError(f"world {world_name} not found")
     # 获取日志
     tail += 1
     logs = collections.deque(maxlen=tail)
-    async for line in agent.logs(world, cluster):
+    async for line in agent.logs(docker_api, container_name):
         logs.append(line)
         if len(logs) == tail:
             logs.popleft()

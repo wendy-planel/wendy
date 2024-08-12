@@ -5,7 +5,7 @@ async def upgrade(db: BaseDBAsyncClient) -> str:
     return """
         CREATE TABLE IF NOT EXISTS "deploy" (
     "id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-    "content" JSON NOT NULL,
+    "cluster" JSON NOT NULL,
     "status" VARCHAR(32) NOT NULL,
     "created_at" TIMESTAMP NOT NULL  DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP NOT NULL  DEFAULT CURRENT_TIMESTAMP

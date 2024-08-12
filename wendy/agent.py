@@ -22,23 +22,23 @@ from wendy.settings import (
 log = structlog.get_logger()
 
 
-def get_cluster_path(id: str) -> str:
+def get_cluster_path(id: str | int) -> str:
     """获取存档目录路径.
 
     Args:
-        id (str): 部署ID.
+        id (str | int): 部署ID.
 
     Returns:
         str: 存档目录路径(在本容器中，非dst容器).
     """
-    return os.path.join(GAME_ARCHIVE_PATH, id)
+    return os.path.join(GAME_ARCHIVE_PATH, str(id))
 
 
 def get_container_name(
-    id: str,
-    world: Literal["Master", "Caves"],
+    id: str | int,
+    type: Literal["Master", "Caves"],
 ) -> str:
-    return f"dst_{world.lower()}_{id}"
+    return f"dst_{type.lower()}_{id}"
 
 
 def make_tarfile_in_memory(
@@ -54,58 +54,59 @@ def make_tarfile_in_memory(
 
 async def download_archive(
     id: str,
-    docker: aiodocker.Docker,
+    docker_api: str,
 ):
-    """上次存档到挂载卷.
+    """下载存档.
 
     Args:
-        id (str): 存档ID.
-        docker (aiodocker.Docker): docker.
-
+        id (str): id.
+        docker_api (str): docker.
     """
-    # 临时上传存档的容器
-    container_name = f"dst_busybox_{id}"
-    await pull("busybox:latest", docker)
-    # 创建一个busybox容器
-    target_path = "/home/steam/dst/archive"
-    config = {
-        "Image": "busybox:latest",
-        "RestartPolicy": {"Name": "no"},
-        "Cmd": ["sh", "-c", "while true; do sleep 3600; done"],
-        "HostConfig": {
-            "Mounts": [
-                {
-                    "Type": "volume",
-                    "Source": f"{GAME_ARCHIVE_VOLUME}_{id}",
-                    "Target": target_path,
-                }
-            ]
-        },
-    }
-    busybox = await docker.containers.create_or_replace(container_name, config)
-    await busybox.start()
-    file = await busybox.get_archive(target_path)
-    # 停止busybox容器
-    await busybox.stop()
+    async with aiodocker.Docker(docker_api) as docker:  # 临时上传存档的容器
+        # 临时上传存档的容器
+        container_name = f"wendy_busybox_{id}"
+        await pull("busybox:latest", docker)
+        # 创建一个busybox容器
+        target_path = "/home/steam/dst/archive"
+        config = {
+            "Image": "busybox:latest",
+            "RestartPolicy": {"Name": "no"},
+            "Cmd": ["sh", "-c", "while true; do sleep 3600; done"],
+            "HostConfig": {
+                "Mounts": [
+                    {
+                        "Type": "volume",
+                        "Source": f"{GAME_ARCHIVE_VOLUME}_{id}",
+                        "Target": target_path,
+                    }
+                ]
+            },
+        }
+        busybox = await docker.containers.create_or_replace(container_name, config)
+        await busybox.start()
+        file = await busybox.get_archive(target_path)
+        # 停止busybox容器
+        await busybox.stop()
     return file
 
 
 async def upload_archive(
-    id: str,
+    id: str | int,
     cluster_path: str,
     docker: aiodocker.Docker,
 ) -> str:
-    """上次存档到挂载卷.
+    """上传存档到挂载卷.
 
     Args:
-        id (str): 存档ID.
+        id (str | int): id.
         cluster_path (str): 存档路径.
+        docker (aiodocker.Docker): docker.
 
     Returns:
-        str: 有存档的挂载卷名.
+        str: 挂载卷名.
     """
     # 临时上传存档的容器
-    container_name = f"dst_busybox_{id}"
+    container_name = f"wendy_busybox_{id}"
     await pull("busybox:latest", docker)
     # 创建挂载卷，重复创建不影响
     volume = f"{GAME_ARCHIVE_VOLUME}_{id}"
@@ -192,13 +193,13 @@ async def update_mods(
 
 
 async def deploy_world(
-    id: str,
+    id: str | int,
     image: str,
     volume: str,
     docker: aiodocker.Docker,
-    world: Literal["Master", "Caves"],
+    type: Literal["Master", "Caves"],
 ):
-    container_name = get_container_name(id, world)
+    container_name = get_container_name(id, type)
     config = {
         "Image": image,
         "RestartPolicy": {"Name": "always"},
@@ -213,7 +214,7 @@ async def deploy_world(
             "-cluster",
             "Cluster_1",
             "-shard",
-            world,
+            type,
         ],
         "HostConfig": {
             "Mounts": [
@@ -236,27 +237,39 @@ async def deploy_world(
     return container_name
 
 
-async def deploy(cluster: Cluster):
-    async with aiodocker.Docker(cluster.docker_api) as docker:
-        id = cluster.id
-        cluster.containers.clear()
-        image = DST_IMAGE + ":" + cluster.version
-        # 拉取镜像
-        await pull(image, docker)
-        # 生成存档配置
-        cluster_path = get_cluster_path(cluster.id)
-        cluster.save(cluster_path)
-        # 上传存档到挂载卷
-        volume = await upload_archive(cluster.id, cluster_path, docker)
-        # 更新模组
-        await update_mods(id, image, volume, docker)
-        # 部署主世界
-        master = await deploy_world(id, image, volume, docker, cluster.master.name)
-        cluster.containers.append(master)
-        # 部署洞穴
-        if cluster.enable_caves:
-            caves = await deploy_world(id, image, volume, docker, cluster.caves.name)
-            cluster.containers.append(caves)
+async def deploy(
+    id: int,
+    cluster: Cluster,
+    version: str | None = None,
+) -> Cluster:
+    if version is None:
+        version = await steamcmd.dst_version()
+    # 不可能真有人有那么多服务器吧
+    port = 10000 + id * 100
+    cluster.ini.master_port = port
+    for world in cluster.world:
+        port += 1
+        world.server_port = port
+        port += 1
+        world.master_server_port = port
+        port += 1
+        world.authentication_port = port
+    cluster.save(get_cluster_path(id))
+    for world in cluster.world:
+        async with aiodocker.Docker(world.docker_api) as docker:
+            image = DST_IMAGE + ":" + version
+            # 拉取镜像
+            await pull(image, docker)
+            # 生成存档配置
+            cluster_path = get_cluster_path(id)
+            cluster.save(cluster_path)
+            # 上传存档到挂载卷
+            volume = await upload_archive(id, cluster_path, docker)
+            # 更新模组
+            await update_mods(id, image, volume, docker)
+            # 部署世界
+            world.container = await deploy_world(id, image, volume, docker, world.type)
+    return cluster
 
 
 async def pull(image: str, docker: aiodocker.Docker) -> str:
@@ -273,10 +286,10 @@ async def pull(image: str, docker: aiodocker.Docker) -> str:
 
 
 async def delete(cluster: Cluster):
-    async with aiodocker.Docker(cluster.docker_api) as docker:
-        for name in cluster.containers:
+    for world in cluster.world:
+        async with aiodocker.Docker(world.docker_api) as docker:
             try:
-                container = await docker.containers.get(name)
+                container = await docker.containers.get(world.container)
                 await container.stop()
                 await container.delete()
             except Exception:
@@ -284,13 +297,44 @@ async def delete(cluster: Cluster):
 
 
 async def stop(cluster: Cluster):
-    async with aiodocker.Docker(cluster.docker_api) as docker:
-        for name in cluster.containers:
+    for world in cluster.world:
+        async with aiodocker.Docker(world.docker_api) as docker:
             try:
-                container = await docker.containers.get(name)
+                container = await docker.containers.get(world.container)
                 await container.stop()
             except Exception:
                 pass
+
+
+async def redeploy_check(
+    cluster: Cluster,
+    version: str | None = None,
+) -> bool:
+    """检测是否需要重新部署.
+
+    Args:
+        cluster (Cluster): cluster.
+        version (str | None, optional): 最新版本.
+
+    Returns:
+        bool: True 需要重新部署.
+    """
+    if version is None:
+        version = await steamcmd.dst_version()
+    for world in cluster.world:
+        # 版本更新需要重新部署
+        if world.version != version:
+            return True
+        async with aiodocker.Docker(world.docker_api) as docker:
+            try:
+                container = await docker.containers.get(world.container)
+                status = container._container.get("State", {}).get("Status")
+                # 状态异常需要重新部署
+                assert status == "running"
+            except Exception:
+                return True
+        # TODO 模组更新检测
+    return False
 
 
 async def monitor():
@@ -298,29 +342,16 @@ async def monitor():
     while True:
         try:
             version = await steamcmd.dst_version()
-            async for item in models.Deploy.filter(
-                status=DeployStatus.running.value,
-            ):
-                cluster = Cluster.model_validate(item.content)
-                async with aiodocker.Docker(cluster.docker_api) as docker:
-                    log.info(f"[monitor] 最新镜像: {version}")
-                    redeploy = False
-                    if cluster.version != version:
-                        cluster.version = version
-                        redeploy = True
-                    for container_name in cluster.containers:
-                        try:
-                            container = await docker.containers.get(container_name)
-                            status = container._container.get("State", {}).get("Status")
-                            redeploy |= status != "running"
-                        except Exception:
-                            redeploy = True
-                    if redeploy:
-                        log.info(f"redeploy {cluster.id}")
-                        await deploy(cluster)
-                        await models.Deploy.filter(id=int(cluster.id)).update(
-                            content=cluster.model_dump(),
-                        )
+            log.info(f"[monitor] 最新镜像: {version}")
+            running = DeployStatus.running.value
+            async for item in models.Deploy.filter(status=running):
+                cluster = Cluster.model_validate(item.cluster)
+                if await redeploy_check(cluster, version):
+                    log.info(f"redeploy {item.id}: {version}")
+                    cluster = await deploy(item.id, cluster, version=version)
+                    await models.Deploy.filter(id=item.id).update(
+                        cluster=cluster.model_dump(),
+                    )
         except Exception as e:
             log.exception(f"monitor error: {e}")
         finally:
@@ -329,18 +360,17 @@ async def monitor():
 
 async def attach(
     command: str,
-    world: Literal["master", "caves"],
-    cluster: Cluster,
+    docker_api: str,
+    container_name: str,
 ):
     """控制台执行命令.
 
     Args:
         command (str): 命令.
-        world (Literal["master", "caves"]): 世界.
-        cluster (Cluster): 存档.
+        docker_api (str): DOCKER API.
+        container_name (str): 容器名.
     """
-    container_name = get_container_name(cluster.id, world)
-    async with aiodocker.Docker(cluster.docker_api) as docker:
+    async with aiodocker.Docker(docker_api) as docker:
         container = await docker.containers.get(container_name)
         console = container.attach(stdout=True, stderr=True, stdin=True)
         async with console:
@@ -348,11 +378,10 @@ async def attach(
 
 
 async def logs(
-    world: Literal["master", "caves"],
-    cluster: Cluster,
+    docker_api: str,
+    container_name: str,
 ):
-    container_name = get_container_name(cluster.id, world)
-    async with aiodocker.Docker(cluster.docker_api) as docker:
+    async with aiodocker.Docker(docker_api) as docker:
         container = await docker.containers.get(container_name)
         params = {
             "stdout": True,
