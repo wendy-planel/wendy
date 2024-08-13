@@ -108,7 +108,7 @@ class ClusterIni(BaseModel):
     shard_enabled: bool = True
     bind_ip: str = "127.0.0.1"
     master_ip: str = "127.0.0.1"
-    master_port: int
+    master_port: int = -1
     cluster_key: str = "defaultPass"
 
     def save(self, path: str):

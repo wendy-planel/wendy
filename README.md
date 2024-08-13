@@ -39,10 +39,11 @@
         -H 'accept: application/json' \
         -H 'Content-Type: application/json' \
         -d '{
-        "cluster_token": "科雷令牌",
-        "cluster_name": "Wendy Cute",
-        "cluster_description": "Wendy is cute."
-        }'
+            "cluster_token": "你的科雷令牌",
+            "ini": {
+                        "cluster_name": "Wendy Cute"
+                  }
+            }'
     
     注意第一次部署可能很慢需要拉取镜像
 
