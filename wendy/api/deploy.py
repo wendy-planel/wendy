@@ -12,7 +12,7 @@ from fastapi import APIRouter, Body, File, UploadFile
 
 from wendy.cluster import Cluster
 from wendy.constants import DeployStatus
-from wendy import models, agent, steamcmd
+from wendy import models, agent
 from wendy.settings import DOCKER_API_DEFAULT
 
 
@@ -102,9 +102,7 @@ async def stop(id: int):
 )
 async def restart(id: int):
     deploy = await models.Deploy.get(id=id)
-    version = await steamcmd.dst_version()
     cluster = Cluster.model_validate(deploy.cluster)
-    cluster.version = version
     await agent.deploy(cluster)
     deploy.cluster = cluster.model_dump()
     deploy.status = DeployStatus.running.value
