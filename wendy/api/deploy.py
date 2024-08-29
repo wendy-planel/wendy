@@ -103,7 +103,7 @@ async def stop(id: int):
 async def restart(id: int):
     deploy = await models.Deploy.get(id=id)
     cluster = Cluster.model_validate(deploy.cluster)
-    await agent.deploy(cluster)
+    await agent.deploy(deploy.id, cluster)
     deploy.cluster = cluster.model_dump()
     deploy.status = DeployStatus.running.value
     await deploy.save()
