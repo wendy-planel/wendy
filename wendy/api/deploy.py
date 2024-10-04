@@ -135,30 +135,25 @@ async def upload(
     else:
         raise ValueError(f"Unsupported {suffix}")
     target_file = "cluster.ini"
-    cluster_path = None
+    target_path = None
     for dirpath, _, filenames in os.walk(temp_dir):
         if target_file in filenames:
-            # 类似  /tmp/tmpunk2y5rs/xx/xxxxxxx/Cluster_x
-            cluster_path = dirpath
+            target_path = dirpath
     # 无法定位到目录
-    if cluster_path is None:
+    if target_path is None:
         raise ValueError(f"not found {target_file}")
-    cluster = Cluster.create_from_dir(
-        cluster_path,
-        docker_api,
-    )
+    cluster = Cluster.create_from_dir(target_path, docker_api)
     deploy = await models.Deploy.create(
         cluster=cluster.model_dump(),
         status=DeployStatus.pending.value,
     )
     # 读取当前
-    parent_directory = os.path.dirname(cluster_path)
-    rename_cluster_path = os.path.join(parent_directory, "Cluster_1")
-    shutil.move(cluster_path, rename_cluster_path)
+    cluster_path = tempfile.mkdtemp()
+    shutil.move(target_path, os.path.join(cluster_path, "Cluster_1"))
     async with aiodocker.Docker(docker_api) as docker:
         await agent.upload_archive(
             id=deploy.id,
-            cluster_path=parent_directory,
+            cluster_path=cluster_path,
             docker=docker,
         )
     await agent.deploy(deploy.id, cluster)
