@@ -10,9 +10,9 @@ import aiodocker
 from tortoise.transactions import atomic
 from fastapi import APIRouter, Body, File, UploadFile
 
+from wendy import models, agent
 from wendy.cluster import Cluster
 from wendy.constants import DeployStatus
-from wendy import models, agent
 from wendy.settings import DOCKER_API_DEFAULT
 
 
@@ -33,7 +33,6 @@ async def create(
         status=DeployStatus.pending.value,
     )
     cluster = await agent.deploy(deploy.id, cluster)
-    # 更新部署后的状态
     deploy.cluster = cluster.model_dump()
     deploy.status = DeployStatus.running.value
     await deploy.save()
@@ -110,7 +109,11 @@ async def restart(id: int):
     return "ok"
 
 
-@router.post("/upload", description="上传部署")
+@router.post(
+    "/upload",
+    description="上传部署",
+)
+@atomic(connection_name="default")
 async def upload(
     docker_api: str = Body(default=DOCKER_API_DEFAULT),
     file: UploadFile = File(),

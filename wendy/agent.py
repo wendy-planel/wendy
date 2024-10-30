@@ -1,8 +1,9 @@
+from typing import Literal, List
+
 import io
 import os
 import asyncio
 import tarfile
-from typing import Literal
 
 import structlog
 import aiodocker
@@ -90,6 +91,53 @@ async def download_archive(
     return file
 
 
+async def download_mods(
+    id: str | int,
+    mods: List[str],
+    cluster_path: str,
+    timeout: int = 3000,
+):
+    if not mods:
+        return
+    container_name = f"dst_download_mods_{id}"
+    image = "steamcmd/steamcmd:latest"
+    mount_point = os.path.join(cluster_path, "ugc_mods")
+    cmd = ["+login", "anonymous"]
+    for mod_id in mods:
+        cmd.extend(["+workshop_download_item", "322330", mod_id])
+    cmd.append("+quit")
+    async with aiodocker.Docker() as docker:
+        await pull(image, docker)
+        config = {
+            "Image": "steamcmd/steamcmd:latest",
+            "RestartPolicy": {"Name": "no"},
+            "Cmd": cmd,
+            "HostConfig": {
+                "Binds": [
+                    f"{mount_point}:/root/.local/share/Steam/steamapps/workshop",
+                ],
+                "NetworkMode": "host",
+            },
+        }
+        container = await docker.containers.create_or_replace(
+            name=container_name,
+            config=config,
+        )
+        await container.start()
+        while timeout > 0:
+            container = await docker.containers.get(container_name)
+            info = await container.show()
+            if info["State"]["Status"] == "exited":
+                break
+            else:
+                timeout -= 3
+                await asyncio.sleep(3)
+    ugc_mods = os.listdir(os.path.join(mount_point, "content/322330"))
+    for mod_id in mods:
+        if mod_id not in ugc_mods:
+            raise ValueError(f"mod: {mod_id} download fail")
+
+
 async def upload_archive(
     id: str | int,
     cluster_path: str,
@@ -144,54 +192,6 @@ async def upload_archive(
     return volume
 
 
-async def update_mods(
-    id: str,
-    image: str,
-    volume: str,
-    docker: aiodocker.Docker,
-    timeout: int = 3000,
-):
-    container_name = f"dst_update_mods_{id}"
-    # 不是很好的解决办法
-    volumes = await docker.volumes.list()
-    mount_point = None
-    for item in volumes["Volumes"]:
-        if item["Name"] == volume:
-            mount_point = item["Mountpoint"]
-    if mount_point is None:
-        return
-    config = {
-        "Image": image,
-        "RestartPolicy": {"Name": "no"},
-        "Cmd": [
-            "-only_update_server_mods",
-            "-ugc_directory",
-            "/home/steam/dst/game/ugc_mods",
-        ],
-        "HostConfig": {
-            "Binds": [
-                f"{mount_point}/mods:/home/steam/dst/game/mods",
-                f"{mount_point}/ugc_mods:/home/steam/dst/game/ugc_mods",
-            ],
-            "NetworkMode": "host",
-        },
-    }
-    container = await docker.containers.create_or_replace(
-        name=container_name,
-        config=config,
-    )
-    await container.start()
-    while timeout > 0:
-        container = await docker.containers.get(container_name)
-        info = await container.show()
-        if info["State"]["Status"] == "exited":
-            break
-        else:
-            timeout -= 3
-            await asyncio.sleep(3)
-    return container_name
-
-
 async def deploy_world(
     id: str | int,
     image: str,
@@ -244,30 +244,21 @@ async def deploy(
 ) -> Cluster:
     if version is None:
         version = await steamcmd.dst_version()
-    # 不可能真有人有那么多服务器吧
     port = 10000 + id * 100
     cluster.ini.master_port = port
     for world in cluster.world:
-        port += 1
-        world.server_port = port
-        port += 1
-        world.master_server_port = port
-        port += 1
-        world.authentication_port = port
-    cluster.save(get_cluster_path(id))
+        world.server_port = port + 1
+        world.master_server_port = port + 2
+        world.authentication_port = port + 3
+        port += 3
+    cluster_path = get_cluster_path(id)
+    cluster.save(cluster_path)
+    await download_mods(id, cluster.mods, cluster_path)
     for world in cluster.world:
         async with aiodocker.Docker(world.docker_api) as docker:
             image = DST_IMAGE + ":" + version
-            # 拉取镜像
             await pull(image, docker)
-            # 生成存档配置
-            cluster_path = get_cluster_path(id)
-            cluster.save(cluster_path)
-            # 上传存档到挂载卷
             volume = await upload_archive(id, cluster_path, docker)
-            # 更新模组
-            await update_mods(id, image, volume, docker)
-            # 部署世界
             world.container = await deploy_world(id, image, volume, docker, world.type)
             world.version = version
     return cluster
@@ -308,7 +299,7 @@ async def stop(cluster: Cluster):
                 pass
 
 
-async def redeploy_check(
+async def redeploy(
     cluster: Cluster,
     version: str | None = None,
 ) -> bool:
@@ -348,12 +339,13 @@ async def monitor():
             running = DeployStatus.running.value
             async for item in models.Deploy.filter(status=running):
                 cluster = Cluster.model_validate(item.cluster)
-                if await redeploy_check(cluster, version):
-                    log.info(f"redeploy {item.id}: {version}")
-                    cluster = await deploy(item.id, cluster, version=version)
-                    await models.Deploy.filter(id=item.id).update(
-                        cluster=cluster.model_dump(),
-                    )
+                if not await redeploy(cluster, version):
+                    continue
+                log.info(f"redeploy {item.id}: {version}")
+                cluster = await deploy(item.id, cluster, version=version)
+                await models.Deploy.filter(id=item.id).update(
+                    cluster=cluster.model_dump()
+                )
         except Exception as e:
             log.exception(f"monitor error: {e}")
         finally:

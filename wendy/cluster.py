@@ -194,15 +194,20 @@ class Cluster(BaseModel):
         ),
     ]
 
-    def save_mods_setup(self, mods_path: str):
+    @property
+    def mods(self) -> List[str]:
+        mods = set()
         for world in self.world:
-            mods = set(re.findall(r"workshop-([0-9]+)", world.modoverrides))
-            filename = "dedicated_server_mods_setup.lua"
-            if mods:
-                with open(os.path.join(mods_path, filename), "w") as file:
-                    for mod_id in mods:
-                        line = f'ServerModSetup("{mod_id}")\n'
-                        file.write(line)
+            for mod_id in re.findall(r"workshop-([0-9]+)", world.modoverrides):
+                mods.add(mod_id)
+        return list(mods)
+
+    def save_mods_setup(self, mods_path: str):
+        filename = "dedicated_server_mods_setup.lua"
+        with open(os.path.join(mods_path, filename), "w") as file:
+            for mod_id in self.mods:
+                line = f'ServerModSetup("{mod_id}")\n'
+                file.write(line)
 
     def save(self, path: str):
         mods_path = os.path.join(path, self.mods_dir)
