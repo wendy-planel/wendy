@@ -1,5 +1,7 @@
 from typing import List, Dict
 
+import os
+
 import httpx
 
 
@@ -45,6 +47,8 @@ def parse_mods_last_updated(acf_file_path: str) -> Dict[str, int]:
     Returns:
         Dict[str, int]: {"模组ID": "最后一次更新时间"}.
     """
+    if not os.path.exists(acf_file_path):
+        return {}
     with open(acf_file_path, "r") as file:
         file_content = file.read()
     lines = file_content.splitlines()
