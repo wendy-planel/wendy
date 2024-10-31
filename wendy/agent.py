@@ -35,13 +35,6 @@ def get_cluster_path(id: str | int) -> str:
     return os.path.join(GAME_ARCHIVE_PATH, str(id))
 
 
-def get_container_name(
-    id: str | int,
-    type: Literal["Master", "Caves"],
-) -> str:
-    return f"dst_{type.lower()}_{id}"
-
-
 def make_tarfile_in_memory(
     source_dir: str,
     arcname: str,
@@ -199,7 +192,7 @@ async def deploy_world(
     docker: aiodocker.Docker,
     type: Literal["Master", "Caves"],
 ):
-    container_name = get_container_name(id, type)
+    container_name = f"dst_{type.lower()}_{id}"
     config = {
         "Image": image,
         "RestartPolicy": {"Name": "always"},
@@ -326,7 +319,18 @@ async def redeploy(
                 assert status == "running"
             except Exception:
                 return True
-        # TODO 模组更新检测
+    if not cluster.mods:
+        return False
+    # 模组更新检测
+    mods_info = await steamcmd.mods_last_updated(cluster.mods)
+    current_mods_info = steamcmd.parse_mods_last_updated()
+    for mod_id in cluster.mods:
+        if mod_id not in mods_info or mod_id not in current_mods_info:
+            log.warning(f"cluster {cluster.id} mod {mod_id} not found")
+            return True
+        if mods_info[mod_id] != current_mods_info[mod_id]:
+            log.info(f"cluster {cluster.id} mod {mod_id} update")
+            return True
     return False
 
 
