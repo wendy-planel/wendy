@@ -8,7 +8,7 @@ from io import BytesIO
 import structlog
 import aiodocker
 from tortoise.transactions import atomic
-from fastapi import APIRouter, Body, File, UploadFile
+from fastapi import APIRouter, Body, File, UploadFile, Query
 
 from wendy import models, agent
 from wendy.cluster import Cluster
@@ -60,9 +60,12 @@ async def update(
     description="获取所有部署",
 )
 async def reads(
-    status: DeployStatus,
+    status: DeployStatus | None = Query(default=None),
 ):
-    return await models.Deploy.filter(status=status.value).all()
+    if status is None:
+        return await models.Deploy.all()
+    else:
+        return await models.Deploy.filter(status=status.value).all()
 
 
 @router.get(
