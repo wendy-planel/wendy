@@ -1,4 +1,4 @@
-from typing import Literal, List
+from typing import List
 
 import io
 import os
@@ -10,9 +10,9 @@ import aiodocker
 import aiodocker.utils
 import aiodocker.multiplexed
 
-from wendy.cluster import Cluster
 from wendy import models, steamcmd
 from wendy.constants import DeployStatus
+from wendy.cluster import Cluster, ClusterWorld
 from wendy.settings import (
     DST_IMAGE,
     GAME_ARCHIVE_PATH,
@@ -36,28 +36,27 @@ def get_cluster_path(id: str | int) -> str:
 
 
 def make_tarfile_in_memory(
-    source_dir: str,
+    cluster_path: str,
     arcname: str,
 ) -> io.BytesIO:
     tar_stream = io.BytesIO()
     with tarfile.open(fileobj=tar_stream, mode="w") as tar:
-        tar.add(source_dir, arcname=arcname)
+        tar.add(cluster_path, arcname=arcname)
     tar_stream.seek(0)
     return tar_stream
 
 
 async def download_archive(
-    id: str,
+    id: str | int,
     docker_api: str,
 ):
     """下载存档.
 
     Args:
-        id (str): id.
+        id (str | int): id.
         docker_api (str): docker.
     """
-    async with aiodocker.Docker(docker_api) as docker:  # 临时上传存档的容器
-        # 临时上传存档的容器
+    async with aiodocker.Docker(docker_api) as docker:
         container_name = f"wendy_busybox_{id}"
         await pull("busybox:latest", docker)
         # 创建一个busybox容器
@@ -190,9 +189,9 @@ async def deploy_world(
     image: str,
     volume: str,
     docker: aiodocker.Docker,
-    type: Literal["Master", "Caves"],
+    world: ClusterWorld,
 ):
-    container_name = f"dst_{type.lower()}_{id}"
+    container_name = f"dst_{world.name.lower()}_{id}"
     config = {
         "Image": image,
         "RestartPolicy": {"Name": "always"},
@@ -207,7 +206,7 @@ async def deploy_world(
             "-cluster",
             "Cluster_1",
             "-shard",
-            type,
+            world.type,
         ],
         "HostConfig": {
             "Mounts": [
@@ -252,7 +251,7 @@ async def deploy(
             image = DST_IMAGE + ":" + version
             await pull(image, docker)
             volume = await upload_archive(id, cluster_path, docker)
-            world.container = await deploy_world(id, image, volume, docker, world.type)
+            world.container = await deploy_world(id, image, volume, docker, world)
             world.version = version
     return cluster
 

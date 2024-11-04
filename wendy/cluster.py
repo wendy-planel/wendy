@@ -36,7 +36,7 @@ class ClusterWorld(BaseModel):
     container: str = ""
 
     def save(self, path: str):
-        path = os.path.join(path, self.name)
+        path = os.path.join(path, self.type)
         # 创建目录
         if not os.path.exists(path):
             os.makedirs(path)
