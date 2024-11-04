@@ -18,7 +18,7 @@ log = structlog.get_logger()
 async def command(
     id: int,
     command: str = Body(),
-    world_name: str = Body(default="Master"),
+    world_name: str = Body(),
 ):
     command = command.strip() + "\n"
     deploy = await models.Deploy.get(id=id)
@@ -41,7 +41,7 @@ async def command(
 async def logs(
     id: int,
     tail: int = Query(default=50),
-    world_name: str = Query(default="Master"),
+    world_name: str = Query(),
 ):
     deploy = await models.Deploy.get(id=id)
     cluster = Cluster.model_validate(deploy.cluster)
