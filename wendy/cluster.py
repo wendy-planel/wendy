@@ -99,7 +99,7 @@ class ClusterIni(BaseModel):
     lan_only_cluster: bool = False
     cluster_password: str = ""
     cluster_description: str = ""
-    cluster_name: str
+    cluster_name: str = "Wendy Cute"
     offline_cluster: bool = False
     cluster_language: str = "zh"
     # [MISC]
@@ -166,7 +166,7 @@ class ClusterIni(BaseModel):
 
 class Cluster(BaseModel):
     cluster_token: str
-    ini: ClusterIni = ClusterIni(cluster_name="Wendy Cute", master_port=10888)
+    ini: ClusterIni = ClusterIni()
     world: List[ClusterWorld] = [
         ClusterWorld(
             id="1",

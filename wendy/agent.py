@@ -237,7 +237,8 @@ async def deploy(
     if version is None:
         version = await steamcmd.dst_version()
     port = 10000 + id * 100
-    cluster.ini.master_port = port
+    if cluster.ini.master_port == -1:
+        cluster.ini.master_port = port
     for world in cluster.world:
         world.server_port = port + 1
         world.master_server_port = port + 2
