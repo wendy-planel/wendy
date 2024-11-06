@@ -118,13 +118,16 @@ async def restart(id: int):
 )
 @atomic(connection_name="default")
 async def upload(
+    master_port: int = Body(default=-1),
     docker_api: str = Body(default=DOCKER_API_DEFAULT),
     file: UploadFile = File(),
 ):
     """上传文件部署.
 
     Args:
-        file (UploadFile, optional): 文件.
+        master_port (int, optional): master端口默认-1代表自动生成.
+        docker_api (str, optional): docker api.
+        file (UploadFile): 存档文件.
     """
     filename = file.filename
     file_content = await file.read(1_073_741_824)
@@ -162,6 +165,7 @@ async def upload(
             cluster_path=cluster_path,
             docker=docker,
         )
+    cluster.ini.master_port = master_port
     await agent.deploy(deploy.id, cluster)
     deploy.cluster = cluster.model_dump()
     deploy.status = DeployStatus.running.value
