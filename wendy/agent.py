@@ -293,12 +293,14 @@ async def stop(cluster: Cluster):
 
 
 async def redeploy(
+    id: int,
     cluster: Cluster,
     version: str | None = None,
 ) -> bool:
     """检测是否需要重新部署.
 
     Args:
+        id (int): ID.
         cluster (Cluster): cluster.
         version (str | None, optional): 最新版本.
 
@@ -324,16 +326,16 @@ async def redeploy(
     # 模组更新检测
     mods_info = await steamcmd.mods_last_updated(cluster.mods)
     acf_file_path = os.path.join(
-        get_cluster_path(cluster.id),
+        get_cluster_path(id),
         "ugc_mods/appworkshop_322330.acf",
     )
     current_mods_info = steamcmd.parse_mods_last_updated(acf_file_path)
     for mod_id in cluster.mods:
         if mod_id not in mods_info or mod_id not in current_mods_info:
-            log.warning(f"cluster {cluster.id} mod {mod_id} not found")
+            log.warning(f"cluster {id} mod {mod_id} not found")
             return True
         if mods_info[mod_id] != current_mods_info[mod_id]:
-            log.info(f"cluster {cluster.id} mod {mod_id} update")
+            log.info(f"cluster {id} mod {mod_id} update")
             return True
     return False
 
@@ -347,7 +349,7 @@ async def monitor():
             running = DeployStatus.running.value
             async for item in models.Deploy.filter(status=running):
                 cluster = Cluster.model_validate(item.cluster)
-                if not await redeploy(cluster, version):
+                if not await redeploy(item.id, cluster, version):
                     continue
                 log.info(f"redeploy {item.id}: {version}")
                 cluster = await deploy(item.id, cluster, version=version)
