@@ -16,14 +16,14 @@ async def dst_version() -> str:
     return response.json()["data"]["343050"]["depots"]["branches"]["public"]["buildid"]
 
 
-async def mods_last_updated(mods: List[str]) -> Dict[str, int]:
+async def mods_last_updated(mods: List[str]) -> Dict[str, str]:
     """接口获取模组最后一次更新时间.
 
     Args:
         mods (List[str]): 模组列表.
 
     Returns:
-        Dict[str, int]: {"模组ID": "最后一次更新时间"}.
+        Dict[str, str]: {"模组ID": "最后一次更新时间"}.
     """
     async with httpx.AsyncClient() as client:
         url = "http://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/"
@@ -34,18 +34,18 @@ async def mods_last_updated(mods: List[str]) -> Dict[str, int]:
     # 解析数据
     data = {}
     for mod_info in response.json()["response"]["publishedfiledetails"]:
-        data[mod_info["publishedfileid"]] = mod_info["time_updated"]
+        data[mod_info["publishedfileid"]] = str(mod_info["time_updated"])
     return data
 
 
-def parse_mods_last_updated(acf_file_path: str) -> Dict[str, int]:
+def parse_mods_last_updated(acf_file_path: str) -> Dict[str, str]:
     """解析acf文件获取模组最后一次更新时间.
 
     Args:
         acf_file_path (str): acf文件.
 
     Returns:
-        Dict[str, int]: {"模组ID": "最后一次更新时间"}.
+        Dict[str, str]: {"模组ID": "最后一次更新时间"}.
     """
     if not os.path.exists(acf_file_path):
         return {}
@@ -78,5 +78,5 @@ def parse_mods_last_updated(acf_file_path: str) -> Dict[str, int]:
     acf = stack[0]
     data = {}
     for mod_id, mod_info in acf["AppWorkshop"]["WorkshopItemsInstalled"].items():
-        data[mod_id] = mod_info["timeupdated"]
+        data[mod_id] = str(mod_info["timeupdated"])
     return data
