@@ -330,6 +330,8 @@ async def redeploy(
         "ugc_mods/appworkshop_322330.acf",
     )
     current_mods_info = steamcmd.parse_mods_last_updated(acf_file_path)
+    log.info(mods_info)
+    log.info(current_mods_info)
     for mod_id in cluster.mods:
         if mod_id not in mods_info or mod_id not in current_mods_info:
             log.warning(f"cluster {id} mod {mod_id} not found")
