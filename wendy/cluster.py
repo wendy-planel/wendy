@@ -17,10 +17,9 @@ from wendy.constants import (
 class ClusterWorld(BaseModel):
     leveldataoverride: str
     modoverrides: str
-    # server.ini文件配置内容
     # [SHARD]
-    id: str
-    name: str
+    id: str = ""
+    name: str = ""
     is_master: bool
     # [NETWORK]
     server_port: int = -1
@@ -49,19 +48,23 @@ class ClusterWorld(BaseModel):
         # 写入server.ini
         lines = [
             "[SHARD]\n",
-            f"id = {self.id}\n",
-            f"name = {self.name}\n",
-            f"is_master = {'true' if self.is_master else 'false'}\n",
+            f"id = {self.id}\n" if self.id else "",
+            f"name = {self.name}\n" if self.name else "",
+            f"is_master = {self._dump_bool(self.is_master)}\n",
             "\n[NETWORK]\n",
             f"server_port = {self.server_port}\n",
             "\n[STEAM]\n",
             f"master_server_port = {self.master_server_port}\n",
             f"authentication_port = {self.authentication_port}\n",
             "\n[ACCOUNT]\n",
-            f"encode_user_path = {'true' if self.encode_user_path else 'false'}\n",
+            f"encode_user_path = {self._dump_bool(self.encode_user_path)}\n",
         ]
         with open(os.path.join(path, "server.ini"), "w") as file:
             file.writelines(lines)
+
+    @classmethod
+    def _dump_bool(cls, value: bool) -> str:
+        return "true" if value else "false"
 
     @classmethod
     def load_from_file(
@@ -75,16 +78,18 @@ class ClusterWorld(BaseModel):
             leveldataoverride = file.read()
         with open(os.path.join(path, "modoverrides.lua"), "r") as file:
             modoverrides = file.read()
-        is_master = type == "Master"
-        id = "1" if is_master else "2"
+        config = configparser.ConfigParser()
+        config.read(os.path.join(path, "server.ini"))
+        config = config._sections
+        data = {}
+        data.update(config.get("SHARD", {}))
+        data.update(config.get("ACCOUNT", {}))
         return cls(
             leveldataoverride=leveldataoverride,
             modoverrides=modoverrides,
-            id=id,
-            name=type,
-            is_master=is_master,
             type=type,
             docker_api=docker_api,
+            **data,
         )
 
 
@@ -116,20 +121,20 @@ class ClusterIni(BaseModel):
             "[GAMEPLAY]\n",
             f"game_mode = {self.game_mode}\n",
             f"max_players = {self.max_players}\n",
-            f"pvp = {'true' if self.pvp else 'false'}\n",
-            f"pause_when_empty = {'true' if self.pause_when_empty else 'false'}\n",
-            f"vote_enabled = {'true' if self.vote_enabled else 'false'}\n",
+            f"pvp = {self._dump_bool(self.pvp)}\n",
+            f"pause_when_empty = {self._dump_bool(self.pause_when_empty)}\n",
+            f"vote_enabled = {self._dump_bool(self.vote_enabled)}\n",
             "\n[NETWORK]\n",
-            f"lan_only_cluster = {'true' if self.lan_only_cluster else 'false'}\n",
+            f"lan_only_cluster = {self._dump_bool(self.lan_only_cluster)}\n",
             f"cluster_password = {self.cluster_password}\n",
             f"cluster_description = {self.cluster_description}\n",
             f"cluster_name = {self.cluster_name}\n",
-            f"offline_cluster = {'true' if self.offline_cluster else 'false'}\n",
+            f"offline_cluster = {self._dump_bool(self.offline_cluster)}\n",
             f"cluster_language = {self.cluster_language}\n",
             "\n[MISC]\n",
-            f"console_enabled = {'true' if self.console_enabled else 'false'}\n",
+            f"console_enabled = {self._dump_bool(self.console_enabled)}\n",
             "\n[SHARD]\n",
-            f"shard_enabled = {'true' if self.shard_enabled else 'false'}\n",
+            f"shard_enabled = {self._dump_bool(self.shard_enabled)}\n",
             f"bind_ip = {self.bind_ip}\n",
             f"master_ip = {self.master_ip}\n",
             f"master_port = {self.master_port}\n",
@@ -137,6 +142,10 @@ class ClusterIni(BaseModel):
         ]
         with open(os.path.join(path, "cluster.ini"), "w") as file:
             file.writelines(lines)
+
+    @classmethod
+    def _dump_bool(cls, value: bool) -> str:
+        return "true" if value else "false"
 
     @classmethod
     def _parse(cls, k: str, v: str):
