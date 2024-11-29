@@ -16,14 +16,13 @@ from wendy.cluster import Cluster, ClusterWorld
 from wendy.settings import (
     DST_IMAGE,
     GAME_ARCHIVE_PATH,
-    GAME_ARCHIVE_VOLUME,
 )
 
 
 log = structlog.get_logger()
 
 
-def get_cluster_path(id: str | int) -> str:
+def get_archive_path(id: str | int) -> str:
     """获取存档目录路径.
 
     Args:
@@ -35,13 +34,15 @@ def get_cluster_path(id: str | int) -> str:
     return os.path.join(GAME_ARCHIVE_PATH, str(id))
 
 
-def make_tarfile_in_memory(
-    cluster_path: str,
-    arcname: str,
-) -> io.BytesIO:
+def make_tarfile_in_memory(archive_path: str) -> io.BytesIO:
     tar_stream = io.BytesIO()
     with tarfile.open(fileobj=tar_stream, mode="w") as tar:
-        tar.add(cluster_path, arcname=arcname)
+        # Walk through all files and directories in the archive_path
+        for root, _, files in os.walk(archive_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                arcname = os.path.relpath(file_path, start=archive_path)
+                tar.add(file_path, arcname=arcname)
     tar_stream.seek(0)
     return tar_stream
 
@@ -69,7 +70,7 @@ async def download_archive(
                 "Mounts": [
                     {
                         "Type": "volume",
-                        "Source": f"{GAME_ARCHIVE_VOLUME}_{id}",
+                        "Source": f"wendy_{id}",
                         "Target": target_path,
                     }
                 ]
@@ -86,14 +87,24 @@ async def download_archive(
 async def download_mods(
     id: str | int,
     mods: List[str],
-    cluster_path: str,
+    mount_path: str,
     timeout: int = 3000,
-):
+) -> str:
+    """下载MOD.
+
+    Args:
+        id (str | int): id.
+        mods (List[str]): 模组列表.
+        mount_path (str): 挂载路径.
+        timeout (int, optional): 超时.
+
+    Returns:
+        str: ugc_mods路径.
+    """
     if not mods:
         return
     container_name = f"dst_download_mods_{id}"
     image = "steamcmd/steamcmd:latest"
-    mount_point = os.path.join(cluster_path, "ugc_mods")
     cmd = ["+login", "anonymous"]
     for mod_id in mods:
         cmd.extend(["+workshop_download_item", "322330", mod_id])
@@ -101,12 +112,12 @@ async def download_mods(
     async with aiodocker.Docker() as docker:
         await pull(image, docker)
         config = {
-            "Image": "steamcmd/steamcmd:latest",
+            "Image": image,
             "RestartPolicy": {"Name": "no"},
             "Cmd": cmd,
             "HostConfig": {
                 "Binds": [
-                    f"{mount_point}:/root/.local/share/Steam/steamapps/workshop",
+                    f"{mount_path}:/root/.local/share/Steam/steamapps/workshop",
                 ],
                 "NetworkMode": "host",
             },
@@ -124,85 +135,81 @@ async def download_mods(
             else:
                 timeout -= 3
                 await asyncio.sleep(3)
-    ugc_mods = os.listdir(os.path.join(mount_point, "content/322330"))
+    ugc_mods_path = os.path.join(mount_path, "content/322330")
+    ugc_mods = os.listdir(ugc_mods_path)
     for mod_id in mods:
         if mod_id not in ugc_mods:
             raise ValueError(f"mod: {mod_id} download fail")
+    return ugc_mods_path
 
 
 async def upload_archive(
     id: str | int,
-    cluster_path: str,
+    archive_path: str,
     docker: aiodocker.Docker,
 ) -> str:
     """上传存档到挂载卷.
 
     Args:
         id (str | int): id.
-        cluster_path (str): 存档路径.
+        archive_path (str): 存档路径.
         docker (aiodocker.Docker): docker.
 
     Returns:
         str: 挂载卷名.
     """
-    # 临时上传存档的容器
     container_name = f"wendy_busybox_{id}"
     await pull("busybox:latest", docker)
-    # 创建挂载卷，重复创建不影响
-    volume = f"{GAME_ARCHIVE_VOLUME}_{id}"
+    volume_name = f"wendy_{id}"
     volume_config = {
-        "Name": volume,
+        "Name": volume_name,
         "Driver": "local",
         "DriverOpts": {},
         "Labels": {"wendy": "cute"},
     }
     await docker.volumes.create(volume_config)
-    # 创建一个busybox容器
-    target_path = "/home/steam/dst/"
-    dst_folder = "archive"
     config = {
         "Image": "busybox:latest",
         "RestartPolicy": {"Name": "no"},
-        "Cmd": ["sh", "-c", "while true; do sleep 3600; done"],
+        "Cmd": ["sh", "-c", "timeout 3600 sh -c 'while true; do sleep 3600; done'"],
         "HostConfig": {
             "Mounts": [
                 {
                     "Type": "volume",
-                    "Source": volume,
-                    "Target": os.path.join(target_path, dst_folder),
+                    "Source": volume_name,
+                    "Target": archive_path,
                 }
             ]
         },
     }
     busybox = await docker.containers.create_or_replace(container_name, config)
     await busybox.start()
-    # 将存档打包为tar并上传到挂载卷中
-    tar_stream = make_tarfile_in_memory(cluster_path, dst_folder)
-    await busybox.put_archive(target_path, tar_stream.read())
-    # 停止busybox容器
+    tar_stream = make_tarfile_in_memory(archive_path)
+    await busybox.put_archive(archive_path, tar_stream.read())
     await busybox.stop()
-    return volume
+    return volume_name
 
 
 async def deploy_world(
     id: str | int,
     image: str,
-    volume: str,
+    volume_name: str,
     docker: aiodocker.Docker,
     world: ClusterWorld,
 ):
     container_name = f"dst_{world.name.lower()}_{id}"
+    target_path = "/home/steam/dst/save"
     config = {
         "Image": image,
         "RestartPolicy": {"Name": "always"},
         "Cmd": [
             "-skip_update_server_mods",
             "-ugc_directory",
-            "/home/steam/dst/archive/ugc_mods",
+            f"{target_path}/ugc_mods",
             "-persistent_storage_root",
             "/home/steam/dst",
             "-conf_dir",
-            "archive",
+            "save",
             "-cluster",
             "Cluster_1",
             "-shard",
@@ -212,8 +219,8 @@ async def deploy_world(
             "Mounts": [
                 {
                     "Type": "volume",
-                    "Source": volume,
-                    "Target": "/home/steam/dst/archive",
+                    "Source": volume_name,
+                    "Target": target_path,
                 }
             ],
             "NetworkMode": "host",
@@ -244,15 +251,16 @@ async def deploy(
         world.master_server_port = port + 2
         world.authentication_port = port + 3
         port += 3
-    cluster_path = get_cluster_path(id)
-    cluster.save(cluster_path)
-    await download_mods(id, cluster.mods, cluster_path)
+    archive_path = get_archive_path(id)
+    cluster.save(archive_path)
+    ugc_mods_path = cluster.save_ugc_mods(archive_path)
+    await download_mods(id, cluster.mods, ugc_mods_path)
     for world in cluster.world:
         async with aiodocker.Docker(world.docker_api) as docker:
             image = DST_IMAGE + ":" + version
             await pull(image, docker)
-            volume = await upload_archive(id, cluster_path, docker)
-            world.container = await deploy_world(id, image, volume, docker, world)
+            volume_name = await upload_archive(id, archive_path, docker)
+            world.container = await deploy_world(id, image, volume_name, docker, world)
             world.version = version
     return cluster
 
@@ -326,7 +334,7 @@ async def redeploy(
     # 模组更新检测
     mods_info = await steamcmd.mods_last_updated(cluster.mods)
     acf_file_path = os.path.join(
-        get_cluster_path(id),
+        get_archive_path(id),
         "ugc_mods/appworkshop_322330.acf",
     )
     current_mods_info = steamcmd.parse_mods_last_updated(acf_file_path)

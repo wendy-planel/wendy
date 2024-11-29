@@ -211,6 +211,22 @@ class Cluster(BaseModel):
                 mods.add(mod_id)
         return list(mods)
 
+    @property
+    def cluster_token_filename(self) -> str:
+        return "cluster_token.txt"
+
+    @property
+    def mods_dirname(self) -> str:
+        return "mods"
+
+    @property
+    def ugc_mods_dirname(self) -> str:
+        return "ugc_mods"
+
+    @property
+    def cluster_dirname(self) -> str:
+        return "Cluster_1"
+
     def save_mods_setup(self, mods_path: str):
         filename = "dedicated_server_mods_setup.lua"
         with open(os.path.join(mods_path, filename), "w") as file:
@@ -218,36 +234,38 @@ class Cluster(BaseModel):
                 line = f'ServerModSetup("{mod_id}")\n'
                 file.write(line)
 
-    def save(self, path: str):
-        mods_path = os.path.join(path, self.mods_dir)
+    def save_ugc_mods(self, path: str) -> str:
+        ugc_mods_path = os.path.join(path, self.ugc_mods_dirname)
+        if not os.path.exists(ugc_mods_path):
+            os.makedirs(ugc_mods_path)
+        return ugc_mods_path
+
+    def save_mods(self, path: str):
+        mods_path = os.path.join(path, self.mods_dirname)
         if not os.path.exists(mods_path):
             os.makedirs(mods_path)
         self.save_mods_setup(mods_path)
-        ugc_mods_path = os.path.join(path, self.ugc_mods_dir)
-        if not os.path.exists(ugc_mods_path):
-            os.makedirs(ugc_mods_path)
-        cluster_dir = os.path.join(path, self.cluster_dir)
-        if not os.path.exists(cluster_dir):
-            os.makedirs(cluster_dir)
-        self.ini.save(cluster_dir)
-        # 写入cluster_token.txt
-        with open(os.path.join(cluster_dir, "cluster_token.txt"), "w") as file:
+        self.save_ugc_mods(path)
+
+    def save_cluster_token(self, cluster_path: str) -> str:
+        cluster_token_path = os.path.join(cluster_path, self.cluster_token_filename)
+        with open(cluster_token_path, "w") as file:
             file.write(self.cluster_token)
-        # 世界配置
+        return cluster_token_path
+
+    def save_cluster(self, path: str) -> str:
+        cluster_path = os.path.join(path, self.cluster_dirname)
+        if not os.path.exists(cluster_path):
+            os.makedirs(cluster_path)
+        self.ini.save(cluster_path)
+        self.save_cluster_token(cluster_path)
         for world in self.world:
-            world.save(cluster_dir)
+            world.save(cluster_path)
+        return cluster_path
 
-    @property
-    def mods_dir(self):
-        return "mods"
-
-    @property
-    def ugc_mods_dir(self):
-        return "ugc_mods"
-
-    @property
-    def cluster_dir(self):
-        return "Cluster_1"
+    def save(self, path: str):
+        self.save_mods(path)
+        self.save_cluster(path)
 
     @classmethod
     def create_from_dir(
@@ -261,7 +279,7 @@ class Cluster(BaseModel):
         master = ClusterWorld.load_from_file(cluster_path, "Master", docker_api)
         caves = ClusterWorld.load_from_file(cluster_path, "Caves", docker_api)
         return cls(
-            cluster_token=cluster_token,
             ini=ini,
             world=[master, caves],
+            cluster_token=cluster_token,
         )
