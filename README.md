@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="https://raw.githubusercontent.com/ylei2024/wendy/main/docs/wendy.png" style="width:200px; height:200px; border-radius:50%;"/>
+    <img src="https://raw.githubusercontent.com/ylei2024/wendy/main/docs/wendy.png" style="width:150px; height:200px; border-radius:50%;"/>
 </div>
 
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/ylei2024/wendy/main.yml)
@@ -20,6 +20,7 @@
 - 存档下载
 - 远程执行控制台指令
 - 日志查看
+- 模组下载
 
 ## 快速部署
 - 拉取项目
