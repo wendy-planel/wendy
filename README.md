@@ -1,8 +1,8 @@
 <div align="center">
-<img src="https://raw.githubusercontent.com/leiyi2000/wendy/main/docs/resources/logo.webp" style="width:200px; height:200px; border-radius:50%;"/>
+    <img src="https://raw.githubusercontent.com/ylei2024/wendy/main/docs/wendy.png" style="width:200px; height:200px; border-radius:50%;"/>
 </div>
 
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/leiyi2000/wendy/main.yml)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/ylei2024/wendy/main.yml)
 
 # wendy
 这是基于容器化部署、管理饥荒游戏的项目、基于docker+fastapi+tortoise-orm开发
@@ -24,7 +24,7 @@
 ## 快速部署
 - 拉取项目
 
-      git clone https://github.com/leiyi2000/wendy.git
+      git clone https://github.com/ylei2024/wendy.git
 - 运行
 
       cd wendy && docker compose up -d
@@ -59,9 +59,9 @@
 
       docker pull swr.cn-north-4.myhuaweicloud.com/ylei/dontstarvetogether:饥荒版本号
 
-- [构建](https://github.com/leiyi2000/dontstarve-server-docker)
+- [构建](https://github.com/ylei2024/dontstarve-server-docker)
   
-      https://github.com/leiyi2000/dontstarve-server-docker
+      https://github.com/ylei2024/dontstarve-server-docker
 
 ## 其他
 - 查询饥荒版本号接口
