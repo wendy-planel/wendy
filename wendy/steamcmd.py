@@ -80,3 +80,15 @@ def parse_mods_last_updated(acf_file_path: str) -> Dict[str, str]:
     for mod_id, mod_info in acf["AppWorkshop"]["WorkshopItemsInstalled"].items():
         data[mod_id] = str(mod_info["timeupdated"])
     return data
+
+
+async def publishedfiledetails(mods: List[str]) -> dict:
+    url = "http://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/"
+    post_data = {
+        "itemcount": len(mods),
+    }
+    for i in range(len(mods)):
+        post_data[f"publishedfileids[{i}]"] = mods[i]
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, data=post_data)
+    return response.json()

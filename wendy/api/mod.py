@@ -7,6 +7,7 @@ import zipfile
 from pydantic import BaseModel
 from fastapi import APIRouter, Body, Response
 
+from wendy import steamcmd
 from wendy.agent import download_mods
 from wendy.settings import GAME_ARCHIVE_PATH
 
@@ -25,7 +26,7 @@ class ModInfo(BaseModel):
     "/info",
     description="获取模组modinfo.lua内容",
 )
-async def read_info(
+async def read_modinfo(
     mods: List[str] = Body(),
 ) -> List[ModInfo]:
     ugc_mods_path = await download_mods(
@@ -76,3 +77,10 @@ async def download(
         headers={"Content-Disposition": "attachment; filename=mods.zip"},
         media_type="application/zip",
     )
+
+
+@router.post("/publishedfiledetails")
+async def publishedfiledetails(
+    mods: List[str] = Body(),
+):
+    return await steamcmd.publishedfiledetails(mods)
