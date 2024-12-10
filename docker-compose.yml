@@ -11,6 +11,7 @@ services:
       - GAME_ARCHIVE_PATH=${PWD}/data
       - DST_IMAGE=${DST_IMAGE:-swr.cn-north-4.myhuaweicloud.com/ylei/dontstarvetogether}
       - DATABASE_URL=sqlite:${PWD}/data/wendy.sqlite3
+      - STEAM_API_KEY=${STEAM_API_KEY}
     ports:
       - "8000:8000"
     restart: always

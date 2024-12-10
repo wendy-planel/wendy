@@ -84,3 +84,20 @@ async def publishedfiledetails(
     mods: List[str] = Body(),
 ):
     return await steamcmd.publishedfiledetails(mods)
+
+
+@router.post("/search")
+async def search(
+    search_text: str = Body(),
+    appid: int = Body(default=322330),
+    page: int = Body(default=1),
+    numperpage: int = Body(default=10),
+    language: int = Body(default=6),
+):
+    return await steamcmd.search_mods(
+        search_text,
+        appid,
+        page=page,
+        numperpage=numperpage,
+        language=language,
+    )

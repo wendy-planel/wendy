@@ -20,3 +20,5 @@ TORTOISE_ORM = {
     },
     "timezone": "Asia/Shanghai",
 }
+# STEAM_API_KEY
+STEAM_API_KEY = os.environ.get("STEAM_API_KEY")

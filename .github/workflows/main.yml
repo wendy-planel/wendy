@@ -41,4 +41,4 @@ jobs:
         rsync -av --delete --exclude='.*' --exclude='data' -e "ssh -p 22" code/ root@${{ secrets.SERVER_HOST }}:/root/apps/wendy
 
     - name: Run
-      run: ssh -p 22 root@${{ secrets.SERVER_HOST }} "export IMAGE_TAG=${GITHUB_SHA::4}$(date +'%Y%m%d') && cd /root/apps/wendy && docker compose up -d"
+      run: ssh -p 22 root@${{ secrets.SERVER_HOST }} "export IMAGE_TAG=${GITHUB_SHA::4}$(date +'%Y%m%d') STEAM_API_KEY=${{ secrets.STEAM_API_KEY }} && cd /root/apps/wendy && docker compose up -d"

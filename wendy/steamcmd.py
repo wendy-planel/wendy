@@ -4,6 +4,8 @@ import os
 
 import httpx
 
+from wendy.settings import STEAM_API_KEY
+
 
 async def dst_version() -> str:
     """获取dst版本号.
@@ -25,15 +27,9 @@ async def mods_last_updated(mods: List[str]) -> Dict[str, str]:
     Returns:
         Dict[str, str]: {"模组ID": "最后一次更新时间"}.
     """
-    async with httpx.AsyncClient() as client:
-        url = "http://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/"
-        post_data = {"itemcount": len(mods)}
-        for i, mod_id in enumerate(mods):
-            post_data[f"publishedfileids[{i}]"] = mod_id
-        response = await client.post(url, data=post_data)
-    # 解析数据
     data = {}
-    for mod_info in response.json()["response"]["publishedfiledetails"]:
+    response = await publishedfiledetails(mods)
+    for mod_info in response["response"]["publishedfiledetails"]:
         data[mod_info["publishedfileid"]] = str(mod_info["time_updated"])
     return data
 
@@ -91,4 +87,38 @@ async def publishedfiledetails(mods: List[str]) -> dict:
         post_data[f"publishedfileids[{i}]"] = mods[i]
     async with httpx.AsyncClient() as client:
         response = await client.post(url, data=post_data)
+    return response.json()
+
+
+async def search_mods(
+    search_text: str,
+    appid: int,
+    page: int = 1,
+    numperpage: int = 10,
+    language: int = 6,
+) -> List[dict]:
+    """关键词搜索模组.
+
+    Args:
+        search_text (str): 关键词.
+        appid (int): appid.
+        page (页): 关键词.
+        numperpage (int): 每页数量.
+        language (int): 语言.
+
+    Returns:
+        List[dict]: 模组.
+    """
+    async with httpx.AsyncClient() as client:
+        url = "https://api.steampowered.com/IPublishedFileService/QueryFiles/v1/"
+        params = {
+            "appid": appid,
+            "page": page,
+            "numperpage": numperpage,
+            "language": language,
+            "search_text": search_text,
+            "return_tags": True,
+            "key": STEAM_API_KEY,
+        }
+        response = await client.get(url, params=params)
     return response.json()
