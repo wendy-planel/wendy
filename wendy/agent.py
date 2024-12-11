@@ -135,6 +135,7 @@ async def download_mods(
             else:
                 timeout -= 3
                 await asyncio.sleep(3)
+    await container.delete()
     ugc_mods_path = os.path.join(mount_path, "content/322330")
     ugc_mods = os.listdir(ugc_mods_path)
     for mod_id in mods:

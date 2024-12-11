@@ -2,6 +2,7 @@ from typing import List
 
 import io
 import os
+import uuid
 import zipfile
 
 from pydantic import BaseModel
@@ -18,8 +19,8 @@ router = APIRouter()
 class ModInfo(BaseModel):
     """模组modinfo.lua内容"""
 
-    mod_id: str
-    mod_info: str
+    id: str
+    code: str
 
 
 @router.post(
@@ -30,7 +31,7 @@ async def read_modinfo(
     mods: List[str] = Body(),
 ) -> List[ModInfo]:
     ugc_mods_path = await download_mods(
-        id="mods",
+        id=str(uuid.uuid4()),
         mods=mods,
         mount_path=os.path.join(GAME_ARCHIVE_PATH, "mods"),
     )
@@ -38,11 +39,11 @@ async def read_modinfo(
     for mod_id in mods:
         mod_info_path = os.path.join(ugc_mods_path, f"{mod_id}/modinfo.lua")
         if not os.path.exists(mod_info_path):
-            mod_info = ""
+            code = ""
         else:
             with open(mod_info_path, "r") as file:
-                mod_info = file.read()
-        data.append(ModInfo(mod_id=mod_id, mod_info=mod_info))
+                code = file.read()
+        data.append(ModInfo(id=mod_id, code=code))
     return data
 
 
@@ -54,7 +55,7 @@ async def download(
     mods: List[str] = Body(),
 ):
     ugc_mods_path = await download_mods(
-        id="mods",
+        id=str(uuid.uuid4()),
         mods=mods,
         mount_path=os.path.join(GAME_ARCHIVE_PATH, "mods"),
     )
