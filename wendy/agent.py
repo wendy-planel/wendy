@@ -4,7 +4,9 @@ import io
 import os
 import asyncio
 import tarfile
+import zipfile
 
+import httpx
 import structlog
 import aiodocker
 import aiodocker.utils
@@ -103,12 +105,28 @@ async def download_mods(
     """
     if not mods:
         return
-    container_name = f"dst_download_mods_{id}"
-    image = "steamcmd/steamcmd:latest"
+    fileurl_mods = []
     cmd = ["+login", "anonymous"]
-    for mod_id in mods:
-        cmd.extend(["+workshop_download_item", "322330", mod_id])
+    details = await steamcmd.publishedfiledetails(mods)
+    ugc_mods_path = os.path.join(mount_path, "content/322330")
+    for item in details["response"]["publishedfiledetails"]:
+        if file_url := item["file_url"]:
+            fileurl_mods.append((item["publishedfileid"], file_url))
+        else:
+            cmd.extend(["+workshop_download_item", "322330", item["publishedfileid"]])
     cmd.append("+quit")
+    async with httpx.AsyncClient() as client:
+        for mod_id, file_url in fileurl_mods:
+            r = await client.get(file_url)
+            target_path = os.path.join(ugc_mods_path, mod_id)
+            with zipfile.ZipFile(io.BytesIO(r.content), "r") as file:
+                members = file.namelist()
+                for member in members:
+                    zipinfo = file.getinfo(member)
+                    zipinfo.filename = zipinfo.filename.replace("\\", "/")
+                    file._extract_member(zipinfo, target_path, None)
+    image = "steamcmd/steamcmd:latest"
+    container_name = f"dst_download_mods_{id}"
     async with aiodocker.Docker() as docker:
         await pull(image, docker)
         config = {
@@ -136,7 +154,6 @@ async def download_mods(
                 timeout -= 3
                 await asyncio.sleep(3)
         await container.delete()
-    ugc_mods_path = os.path.join(mount_path, "content/322330")
     ugc_mods = os.listdir(ugc_mods_path)
     for mod_id in mods:
         if mod_id not in ugc_mods:
