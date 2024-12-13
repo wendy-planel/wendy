@@ -234,18 +234,21 @@ class Cluster(BaseModel):
                 line = f'ServerModSetup("{mod_id}")\n'
                 file.write(line)
 
-    def save_ugc_mods(self, path: str) -> str:
+    def ugc_mods_path(self, path: str) -> str:
         ugc_mods_path = os.path.join(path, self.ugc_mods_dirname)
         if not os.path.exists(ugc_mods_path):
             os.makedirs(ugc_mods_path)
         return ugc_mods_path
+
+    def acf_file_path(self, path: str) -> str:
+        return os.path.join(self.ugc_mods_path(path), "appworkshop_322330.acf")
 
     def save_mods(self, path: str):
         mods_path = os.path.join(path, self.mods_dirname)
         if not os.path.exists(mods_path):
             os.makedirs(mods_path)
         self.save_mods_setup(mods_path)
-        self.save_ugc_mods(path)
+        self.ugc_mods_path(path)
 
     def save_cluster_token(self, cluster_path: str) -> str:
         cluster_token_path = os.path.join(cluster_path, self.cluster_token_filename)

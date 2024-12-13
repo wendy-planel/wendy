@@ -2,7 +2,6 @@ from typing import List
 
 import io
 import os
-import uuid
 import zipfile
 
 from pydantic import BaseModel
@@ -30,14 +29,13 @@ class ModInfo(BaseModel):
 async def read_modinfo(
     mods: List[str] = Body(),
 ) -> List[ModInfo]:
-    ugc_mods_path = await download_mods(
-        id=str(uuid.uuid4()),
+    mods_path = await download_mods(
         mods=mods,
-        mount_path=os.path.join(GAME_ARCHIVE_PATH, "mods"),
+        path=os.path.join(GAME_ARCHIVE_PATH, "mods"),
     )
     data = []
     for mod_id in mods:
-        mod_info_path = os.path.join(ugc_mods_path, f"{mod_id}/modinfo.lua")
+        mod_info_path = os.path.join(mods_path, f"{mod_id}/modinfo.lua")
         if not os.path.exists(mod_info_path):
             code = ""
         else:
@@ -54,23 +52,22 @@ async def read_modinfo(
 async def download(
     mods: List[str] = Body(),
 ):
-    ugc_mods_path = await download_mods(
-        id=str(uuid.uuid4()),
+    mods_path = await download_mods(
         mods=mods,
-        mount_path=os.path.join(GAME_ARCHIVE_PATH, "mods"),
+        path=os.path.join(GAME_ARCHIVE_PATH, "mods"),
     )
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
         for mod_id in mods:
-            dir_path = os.path.join(ugc_mods_path, mod_id)
+            dir_path = os.path.join(mods_path, mod_id)
             if os.path.isdir(dir_path):
                 for root, _, files in os.walk(dir_path):
                     for file in files:
                         file_path = os.path.join(root, file)
-                        arcname = os.path.relpath(file_path, ugc_mods_path)
+                        arcname = os.path.relpath(file_path, mods_path)
                         zip_file.write(file_path, arcname)
             elif os.path.isfile(dir_path):
-                arcname = os.path.relpath(dir_path, ugc_mods_path)
+                arcname = os.path.relpath(dir_path, mods_path)
                 zip_file.write(dir_path, arcname)
     buffer.seek(0)
     return Response(

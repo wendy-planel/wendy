@@ -18,22 +18,6 @@ async def dst_version() -> str:
     return response.json()["data"]["343050"]["depots"]["branches"]["public"]["buildid"]
 
 
-async def mods_last_updated(mods: List[str]) -> Dict[str, str]:
-    """接口获取模组最后一次更新时间.
-
-    Args:
-        mods (List[str]): 模组列表.
-
-    Returns:
-        Dict[str, str]: {"模组ID": "最后一次更新时间"}.
-    """
-    data = {}
-    response = await publishedfiledetails(mods)
-    for mod_info in response["response"]["publishedfiledetails"]:
-        data[mod_info["publishedfileid"]] = str(mod_info["time_updated"])
-    return data
-
-
 def parse_mods_last_updated(acf_file_path: str) -> Dict[str, str]:
     """解析acf文件获取模组最后一次更新时间.
 
@@ -109,7 +93,7 @@ async def search_mods(
     Returns:
         List[dict]: 模组.
     """
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=10) as client:
         url = "https://api.steampowered.com/IPublishedFileService/QueryFiles/v1/"
         params = {
             "appid": appid,
