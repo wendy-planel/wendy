@@ -57,7 +57,7 @@ def parse_mods_last_updated(acf_file_path: str) -> Dict[str, str]:
                 current_key = key
     acf = stack[0]
     data = {}
-    for mod_id, mod_info in acf["AppWorkshop"]["WorkshopItemsInstalled"].items():
+    for mod_id, mod_info in acf["AppWorkshop"]["WorkshopItemDetails"].items():
         data[mod_id] = str(mod_info["timeupdated"])
     return data
 

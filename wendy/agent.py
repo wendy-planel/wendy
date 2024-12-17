@@ -110,15 +110,12 @@ async def filter_downloaded_mods(
         mods_info[mod["publishedfileid"]] = str(mod["time_updated"])
     acf_file_path = os.path.join(path, "appworkshop_322330.acf")
     acf_mods_info = steamcmd.parse_mods_last_updated(acf_file_path)
-    log.info(mods_info)
-    log.info(acf_mods_info)
     for mod_id in os.listdir(os.path.join(path, "content/322330")):
         if mod_id in acf_mods_info:
             downloaded[mod_id] = acf_mods_info[mod_id]
     for mod_id in mods:
         if mod_id not in downloaded or (mods_info.get(mod_id) != downloaded[mod_id]):
             residue_mods.append(mod_id)
-    log.info(residue_mods)
     return residue_mods
 
 
