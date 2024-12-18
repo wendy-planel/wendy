@@ -1,6 +1,6 @@
 import structlog
 from fastapi import APIRouter
-from fastapi.responses import Response
+from fastapi.responses import StreamingResponse
 
 from wendy import models, agent
 from wendy.cluster import Cluster
@@ -22,7 +22,14 @@ async def download(id: int):
         docker_api = world.docker_api
     tar_file = await agent.download_archive(id, docker_api)
     tar_file.fileobj.seek(0)
-    return Response(
-        content=tar_file.fileobj.read(),
+
+    # Create a generator that yields chunks from the file
+    def file_chunk_generator(fileobj, chunk_size=8192):
+        while chunk := fileobj.read(chunk_size):
+            yield chunk
+
+    return StreamingResponse(
+        file_chunk_generator(tar_file.fileobj),
+        media_type="application/x-tar",
         headers={"Content-Disposition": f"attachment; filename=archive_{id}.tar"},
     )
