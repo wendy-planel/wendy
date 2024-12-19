@@ -3,7 +3,7 @@ name: Build and Push Docker Image
 on:
     push:
         branches:
-            - dev
+            - main
 
 jobs:
   docker:
@@ -22,7 +22,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/wendy-apiserver
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/wendy-apiserver:latest
 
       - name: Build and push
         uses: docker/build-push-action@v6
