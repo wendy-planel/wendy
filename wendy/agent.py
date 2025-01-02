@@ -107,14 +107,15 @@ async def filter_downloaded_mods(
     downloaded = {}
     residue_mods = []
     for mod in details["response"]["publishedfiledetails"]:
-        mods_info[mod["publishedfileid"]] = str(mod["time_updated"])
+        if time_updated := mod.get("time_updated"):
+            mods_info[mod["publishedfileid"]] = str(time_updated)
     acf_file_path = os.path.join(path, "appworkshop_322330.acf")
     acf_mods_info = steamcmd.parse_mods_last_updated(acf_file_path)
     for mod_id in os.listdir(os.path.join(path, "content/322330")):
         if mod_id in acf_mods_info:
             downloaded[mod_id] = acf_mods_info[mod_id]
-    for mod_id in mods:
-        if mod_id not in downloaded or (mods_info.get(mod_id) != downloaded[mod_id]):
+    for mod_id in mods_info:
+        if mod_id not in downloaded or (mods_info[mod_id] != downloaded[mod_id]):
             residue_mods.append(mod_id)
     return residue_mods
 
@@ -141,7 +142,7 @@ async def download_mods_by_fileurl(
     fileurl_mods = []
     for mod in details["response"]["publishedfiledetails"]:
         mod_id = mod["publishedfileid"]
-        if file_url := mod["file_url"]:
+        if file_url := mod.get("file_url"):
             fileurl_mods.append((mod_id, file_url))
     async with httpx.AsyncClient(timeout=10) as client:
         for mod_id, file_url in fileurl_mods:
@@ -198,10 +199,6 @@ async def download_mods_by_steamcmd(
                 timeout -= 3
                 await asyncio.sleep(3)
         await container.delete()
-    downloaded_mods = os.listdir(os.path.join(path, "content/322330"))
-    for mod_id in mods:
-        if mod_id not in downloaded_mods:
-            raise ValueError(f"mod: {mod_id} download fail")
 
 
 async def download_mods(
