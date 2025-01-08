@@ -1,15 +1,16 @@
 from typing import List
 
+import json
 import asyncio
 import collections
 
 import aiodocker
 import structlog
-from fastapi import APIRouter, Body, Query
 from sse_starlette.sse import EventSourceResponse
+from fastapi import APIRouter, Body, Query, Request
 
 from wendy import agent, models
-from wendy.cluster import Cluster
+from wendy.cluster import Cluster, ClusterWorld
 
 
 router = APIRouter()
@@ -67,22 +68,41 @@ async def tail_logs(
 
 
 class LogFollow:
-    def __init__(self):
+    def __init__(self, request: Request):
         self._started = False
+        self.request = request
         self.queue = asyncio.Queue()
         self.tasks: List[asyncio.Task] = []
+        self._watch_task: asyncio.Task | None = None
 
     def __aiter__(self):
         return self
 
-    async def read(self, queue: asyncio.Queue, deploy: models.Deploy):
-        cluster = Cluster.model_validate(deploy.cluster)
-        for world in cluster.world:
-            async with aiodocker.Docker(world.docker_api) as docker:
-                container = await docker.containers.get(world.container)
-                _iter = container.log(stdout=True, stderr=True, follow=True)
-                async for line in _iter:
-                    await queue.put(line)
+    async def read(
+        self,
+        id: int,
+        queue: asyncio.Queue,
+        world: ClusterWorld,
+    ):
+        async with aiodocker.Docker(world.docker_api) as docker:
+            container = await docker.containers.get(world.container)
+            _iter = container.log(stdout=True, stderr=True, follow=True)
+            async for data in _iter:
+                message = {
+                    "id": id,
+                    "world_id": world.id,
+                    "world_name": world.name,
+                    "is_master": world.is_master,
+                    "data": data,
+                }
+                await queue.put(json.dumps(message))
+
+    async def _watch(self):
+        while True:
+            if await self.request.is_disconnected():
+                break
+            await asyncio.sleep(5)
+        await self.aclose()
 
     async def aclose(self):
         for task in self.tasks:
@@ -91,15 +111,21 @@ class LogFollow:
     async def __anext__(self):
         if not self._started:
             async for deploy in models.Deploy.all():
-                task = asyncio.create_task(self.read(self.queue, deploy))
-                self.tasks.append(task)
+                cluster = Cluster.model_validate(deploy.cluster)
+                for world in cluster.world:
+                    task = asyncio.create_task(self.read(deploy.id, self.queue, world))
+                    self.tasks.append(task)
             self._started = True
+            self._watch_task = asyncio.create_task(self._watch())
         return await self.queue.get()
+
+    async def __aexit__(self, _exc_type, _exc, _tb):
+        await self.aclose()
 
 
 @router.get(
     "/logs",
     description="获取所有控制台日志",
 )
-async def sse_logs():
-    return EventSourceResponse(LogFollow())
+async def sse_logs(request: Request):
+    return EventSourceResponse(LogFollow(request=request), send_timeout=60)
