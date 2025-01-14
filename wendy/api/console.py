@@ -1,5 +1,6 @@
 from typing import List
 
+import time
 import asyncio
 import collections
 
@@ -104,7 +105,12 @@ class LogFollow:
     ):
         async with aiodocker.Docker(world.docker_api) as docker:
             container = await docker.containers.get(world.container)
-            _iter = container.log(stdout=True, stderr=True, follow=True)
+            _iter = container.log(
+                stdout=True,
+                stderr=True,
+                follow=True,
+                since=int(time.time()) - 30 * 60,
+            )
             line = ""
             async for data in _iter:
                 for ch in data:
