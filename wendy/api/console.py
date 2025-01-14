@@ -105,8 +105,15 @@ class LogFollow:
         async with aiodocker.Docker(world.docker_api) as docker:
             container = await docker.containers.get(world.container)
             _iter = container.log(stdout=True, stderr=True, follow=True)
+            line = ""
             async for data in _iter:
-                await queue.put(data)
+                for ch in data:
+                    if ch == "\n":
+                        await queue.put(data)
+                        line = ""
+                    else:
+                        line += ""
+                await queue.put(line)
 
     async def _watch(self):
         while True:
