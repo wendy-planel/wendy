@@ -115,10 +115,10 @@ class LogFollow:
             async for data in _iter:
                 for ch in data:
                     if ch == "\n":
-                        await queue.put(data)
+                        await queue.put(line)
                         line = ""
                     else:
-                        line += ""
+                        line += ch
                 await queue.put(line)
 
     async def _watch(self):
