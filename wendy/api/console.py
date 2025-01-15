@@ -1,6 +1,6 @@
 from typing import List
 
-import time
+import json
 import asyncio
 import collections
 
@@ -65,8 +65,11 @@ async def command(
 )
 async def tail_logs(
     id: int,
-    tail: int = Query(default=50),
-    world_index: int = Query(),
+    tail: int | str = Query(default="all"),
+    since: int = Query(default=0),
+    until: int = Query(default=0),
+    timestamps: bool = Query(default=False),
+    world_index: int = Query(default=0),
 ):
     deploy = await models.Deploy.get(id=id)
     cluster = Cluster.model_validate(deploy.cluster)
@@ -75,7 +78,14 @@ async def tail_logs(
     container_name = world.container
     tail += 1
     logs = collections.deque(maxlen=tail)
-    async for line in agent.logs(docker_api, container_name):
+    _iter = agent.logs(
+        docker_api,
+        container_name,
+        since,
+        until,
+        timestamps,
+    )
+    async for line in _iter:
         logs.append(line)
         if len(logs) == tail:
             logs.popleft()
@@ -85,11 +95,11 @@ async def tail_logs(
 class LogFollow:
     def __init__(
         self,
-        world: ClusterWorld,
         request: Request,
+        since: int,
     ):
-        self.world = world
         self.request = request
+        self.since = since
         self.queue = asyncio.Queue()
         self.tasks: List[asyncio.Task] = []
         self._started = False
@@ -100,6 +110,7 @@ class LogFollow:
 
     async def read(
         self,
+        key: str,
         world: ClusterWorld,
         queue: asyncio.Queue,
     ):
@@ -109,17 +120,17 @@ class LogFollow:
                 stdout=True,
                 stderr=True,
                 follow=True,
-                since=int(time.time()) - 30 * 60,
+                since=self.since,
             )
             line = ""
             async for data in _iter:
                 for ch in data:
                     if ch == "\n":
-                        await queue.put(line)
+                        message = {"key": key, "line": line}
+                        await queue.put(json.dumps(message))
                         line = ""
                     else:
                         line += ch
-                await queue.put(line)
 
     async def _watch(self):
         while True:
@@ -134,8 +145,12 @@ class LogFollow:
 
     async def __anext__(self):
         if not self._started:
-            task = asyncio.create_task(self.read(self.world, self.queue))
-            self.tasks.append(task)
+            async for deploy in models.Deploy.all():
+                cluster = Cluster.model_validate(deploy.cluster)
+                for index, world in enumerate(cluster.world):
+                    key = f"{deploy.id}_{index}"
+                    task = asyncio.create_task(self.read(key, world, self.queue))
+                    self.tasks.append(task)
             self._started = True
             self._watch_task = asyncio.create_task(self._watch())
         return await self.queue.get()
@@ -144,18 +159,6 @@ class LogFollow:
         await self.aclose()
 
 
-@router.get(
-    "/logs/follow/{id}",
-    description="获取所有控制台日志",
-)
-async def sse_logs(
-    id: int,
-    request: Request,
-    world_index: int = Query(),
-):
-    deploy = await models.Deploy.get(id=id)
-    cluster = Cluster.model_validate(deploy.cluster)
-    return EventSourceResponse(
-        LogFollow(cluster.world[world_index], request=request),
-        send_timeout=60,
-    )
+@router.get("/logs/follow")
+async def logs(request: Request, since: int = Query(default=0)):
+    return EventSourceResponse(LogFollow(request, since), send_timeout=60)

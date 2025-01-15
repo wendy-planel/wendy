@@ -466,6 +466,9 @@ async def attach(
 async def logs(
     docker_api: str,
     container_name: str,
+    since: int,
+    until: int,
+    timestamps: bool,
 ):
     async with aiodocker.Docker(docker_api) as docker:
         container = await docker.containers.get(container_name)
@@ -473,6 +476,9 @@ async def logs(
             "stdout": True,
             "stderr": False,
             "follow": False,
+            "since": since,
+            "until": until,
+            "timestamps": timestamps,
         }
         cm = container.docker._query(
             "containers/{self._id}/logs".format(self=container),
