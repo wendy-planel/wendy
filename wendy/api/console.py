@@ -2,7 +2,6 @@ from typing import Dict
 
 import json
 import asyncio
-import collections
 
 import httpx
 import structlog
@@ -66,31 +65,42 @@ async def command(
 )
 async def tail_logs(
     id: int,
-    tail: int | str = Query(default="all"),
-    since: int = Query(default=0),
-    until: int = Query(default=0),
-    timestamps: bool = Query(default=False),
-    world_index: int = Query(default=0),
+    count: int = Query(),
+    tail: int = Query(),
+    world_index: int = Query(),
 ):
+    data = []
     deploy = await models.Deploy.get(id=id)
     cluster = Cluster.model_validate(deploy.cluster)
     world = cluster.world[world_index]
-    docker_api = world.docker_api
-    container_name = world.container
-    tail += 1
-    logs = collections.deque(maxlen=tail)
-    _iter = agent.logs(
-        docker_api,
-        container_name,
-        since,
-        until,
-        timestamps,
-    )
-    async for line in _iter:
-        logs.append(line)
-        if len(logs) == tail:
-            logs.popleft()
-    return logs
+    if world.docker_api.startswith("http"):
+        transport = None
+        base_url = world.docker_api.replace("unix://", "")
+    else:
+        transport = httpx.AsyncHTTPTransport(uds="/var/run/docker.sock")
+        base_url = "http://docker"
+    async with httpx.AsyncClient(transport=transport, base_url=base_url) as client:
+        url = f"/containers/{world.container}/logs"
+        params = {
+            "stdout": True,
+            "stderr": True,
+            "follow": False,
+            "tail": tail,
+        }
+        line = ""
+        async with client.stream("GET", url, params=params) as response:
+            async for chunk in response.aiter_bytes():
+                for ch in chunk.decode("utf-8"):
+                    if ch == "\n":
+                        if count > 0:
+                            data.append(line.strip())
+                            count -= 1
+                        line = ""
+                    else:
+                        line += ch
+                if count <= 0:
+                    break
+    return data
 
 
 class LogFollow:
@@ -135,7 +145,10 @@ class LogFollow:
                 line = ""
                 timeout = httpx.Timeout(None, connect=5)
                 async with client.stream(
-                    "GET", url, params=params, timeout=timeout
+                    "GET",
+                    url,
+                    params=params,
+                    timeout=timeout,
                 ) as response:
                     async for chunk in response.aiter_bytes():
                         for ch in chunk.decode("utf-8"):
