@@ -1,15 +1,16 @@
-from typing import List
+from typing import Dict
 
 import json
 import asyncio
 import collections
 
-import aiodocker
+import httpx
 import structlog
 from sse_starlette.sse import EventSourceResponse
 from fastapi import APIRouter, Body, Query, Request
 
 from wendy import agent, models
+from wendy.constants import DeployStatus
 from wendy.cluster import Cluster, ClusterWorld
 
 
@@ -101,58 +102,83 @@ class LogFollow:
         self.request = request
         self.since = since
         self.queue = asyncio.Queue()
-        self.tasks: List[asyncio.Task] = []
+        self.tasks: Dict[str, asyncio.Task] = {}
+        self.lock = asyncio.Lock()
         self._started = False
-        self._watch_task: asyncio.Task | None = None
+        self._task: asyncio.Task | None = None
 
     def __aiter__(self):
         return self
 
-    async def read(
+    async def _read(
         self,
         key: str,
         world: ClusterWorld,
-        queue: asyncio.Queue,
     ):
-        async with aiodocker.Docker(world.docker_api) as docker:
-            container = await docker.containers.get(world.container)
-            _iter = container.log(
-                stdout=True,
-                stderr=True,
-                follow=True,
-                since=self.since,
-            )
-            line = ""
-            async for data in _iter:
-                for ch in data:
-                    if ch == "\n":
-                        message = {"key": key, "line": line}
-                        await queue.put(json.dumps(message))
-                        line = ""
-                    else:
-                        line += ch
+        if world.docker_api.startswith("http"):
+            transport = None
+            base_url = world.docker_api.replace("unix://", "")
+        else:
+            transport = httpx.AsyncHTTPTransport(uds="/var/run/docker.sock")
+            base_url = "http://docker"
+        try:
+            async with httpx.AsyncClient(
+                transport=transport, base_url=base_url
+            ) as client:
+                url = f"/containers/{world.container}/logs"
+                params = {
+                    "stdout": True,
+                    "stderr": True,
+                    "follow": True,
+                    "since": self.since,
+                }
+                line = ""
+                timeout = httpx.Timeout(None, connect=5)
+                async with client.stream(
+                    "GET", url, params=params, timeout=timeout
+                ) as response:
+                    async for chunk in response.aiter_bytes():
+                        for ch in chunk.decode("utf-8"):
+                            if ch == "\n":
+                                message = {"key": key, "line": line.strip()}
+                                await self.queue.put(json.dumps(message))
+                                line = ""
+                            else:
+                                line += ch
+        finally:
+            async with self.lock:
+                if key in self.tasks:
+                    self.tasks.pop(key)
 
-    async def _watch(self):
+    async def _watch_tasks(self):
+        running = DeployStatus.running.value
+        async with self.lock:
+            async for deploy in models.Deploy.filter(status=running):
+                cluster = Cluster.model_validate(deploy.cluster)
+                for index, world in enumerate(cluster.world):
+                    key = f"{deploy.id}_{index}"
+                    if key not in self.tasks:
+                        task = asyncio.create_task(self._read(key, world))
+                        self.tasks[key] = task
+
+    async def _run(self):
         while True:
             if await self.request.is_disconnected():
                 break
+            else:
+                await self._watch_tasks()
             await asyncio.sleep(5)
         await self.aclose()
 
     async def aclose(self):
-        for task in self.tasks:
+        self._task.cancel()
+        for _, task in self.tasks.items():
             task.cancel()
 
     async def __anext__(self):
         if not self._started:
-            async for deploy in models.Deploy.all():
-                cluster = Cluster.model_validate(deploy.cluster)
-                for index, world in enumerate(cluster.world):
-                    key = f"{deploy.id}_{index}"
-                    task = asyncio.create_task(self.read(key, world, self.queue))
-                    self.tasks.append(task)
+            self._task = asyncio.create_task(self._run())
             self._started = True
-            self._watch_task = asyncio.create_task(self._watch())
         return await self.queue.get()
 
     async def __aexit__(self, _exc_type, _exc, _tb):
