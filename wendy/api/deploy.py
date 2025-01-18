@@ -1,3 +1,5 @@
+from typing import Literal
+
 import os
 import shutil
 import zipfile
@@ -27,15 +29,17 @@ log = structlog.get_logger()
 @atomic(connection_name="default")
 async def create(
     cluster: Cluster = Body(),
+    status: Literal["pending", "running"] = Body(default="running"),
 ):
     deploy = await models.Deploy.create(
         cluster=cluster.model_dump(),
         status=DeployStatus.pending.value,
     )
-    cluster = await agent.deploy(deploy.id, cluster)
-    deploy.cluster = cluster.model_dump()
-    deploy.status = DeployStatus.running.value
-    await deploy.save()
+    if status == "running":
+        cluster = await agent.deploy(deploy.id, cluster)
+        deploy.cluster = cluster.model_dump()
+        deploy.status = DeployStatus.running.value
+        await deploy.save()
     return deploy
 
 
