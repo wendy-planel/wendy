@@ -166,7 +166,7 @@ async def upload(
     async with aiodocker.Docker(docker_api) as docker:
         await agent.upload_archive(
             id=deploy.id,
-            cluster_path=cluster_path,
+            archive_path=cluster_path,
             docker=docker,
         )
     cluster.ini.master_port = master_port
