@@ -11,6 +11,7 @@
     <img src="https://raw.githubusercontent.com/ylei2024/wendy/main/docs/plane.png" style="width:800px; height:400px;/>
   </div>
 
+## 功能
 - 容器化快速开服(支持远程docker api)
 - 上传存档文件开服
 - 添加配置模组(需要配置 STEAM_API_KEY 且确保部署物理机能访问 steam)
