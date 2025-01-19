@@ -14,4 +14,4 @@ services:
     image: ylei2023/wendy-plane:latest
     restart: always
     ports:
-      - "80:80"
+      - "8000:80"
