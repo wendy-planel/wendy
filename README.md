@@ -8,7 +8,7 @@
 
 ## 预览
   <div>
-    <img src="https://raw.githubusercontent.com/ylei2024/wendy/main/docs/plane.png" style="width:800px; height:400px;/>
+    <img src="https://raw.githubusercontent.com/ylei2024/wendy/main/docs/plane.png" style="width:800px; height:400px;"/>
   </div>
 
 ## 功能
