@@ -1,6 +1,8 @@
 services:
   wendy-apiserver:
     image: ylei2023/wendy-apiserver:latest
+    ports:
+      - "8001:8000"
     volumes:
       - ${PWD}/data:${PWD}/data
       - /var/run/docker.sock:/var/run/docker.sock
@@ -12,6 +14,6 @@ services:
     restart: always
   wendy-plane:
     image: ylei2023/wendy-plane:latest
-    restart: always
     ports:
       - "8000:80"
+    restart: always

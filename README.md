@@ -1,74 +1,75 @@
 <div align="center">
-    <img src="https://raw.githubusercontent.com/ylei2024/wendy/main/docs/wendy.png" style="width:150px; height:200px; border-radius:50%;"/>
+  <img src="https://raw.githubusercontent.com/ylei2024/wendy/main/docs/wendy.png" style="width:150px; height:200px; border-radius:50%;"/>
 </div>
 
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/ylei2024/wendy/main.yml)
 
-# wendy
-这是基于容器化部署、管理饥荒游戏的项目、基于docker+fastapi+tortoise-orm开发
+# wendy-plane
 
-## 环境
-- linux
-- docker
+## 预览
+  <div>
+    <img src="https://raw.githubusercontent.com/ylei2024/wendy/main/docs/plane.png" style="width:800px; height:400px;/>
+  </div>
 
-## 功能
-- 一键开服
-- 上传存档开服
-- 支持配置DOCKER-API
-- 自动更新游戏版本
-- 饥荒服务的启停
-- 存档下载
+- 容器化快速开服(支持远程docker api)
+- 上传存档文件开服
+- 添加配置模组(需要配置 STEAM_API_KEY 且确保部署物理机能访问 steam)
+- 监听更新模组、游戏版本
+- 存档文件下载
 - 远程执行控制台指令
-- 日志查看
-- 模组下载
+- 实时日志
 
-## 快速部署
-- 拉取项目
+## 部署
 
-      git clone https://github.com/ylei2024/wendy.git
-- 运行
+- docker 安装
 
-      cd wendy && docker compose up -d
-- 国内运行
+  https://docs.docker.com/engine/install/
 
-      cd wendy && export IMAGE_TAG=$(date +'%Y%m%d%H%M%S') && export DST_IMAGE=swr.cn-north-4.myhuaweicloud.com/ylei/dontstarvetogether && docker compose up -d
+- 下载 docker-compose.yml
 
-- 快速开服
+  ```bash
+  wget https://raw.githubusercontent.com/ylei2024/wendy/main/docker-compose.yml
+  ```
 
-      curl -X 'POST' \
-        'http://127.0.0.1:8000/deploy' \
-        -H 'accept: application/json' \
-        -H 'Content-Type: application/json' \
-        -d '{
-            "cluster_token": "你的科雷令牌",
-            "ini": {
-                        "cluster_name": "Wendy Cute"
-                  }
-            }'
-    
-    注意第一次部署可能很慢需要拉取镜像
+- 启动
+  ```bash
+  docker compose up -d
+  ```
+  或者
+  ```bash
+  export STEAM_API_KEY=xxxx && docker compose up -d
+  ```
+- 说明
 
-- [接口文档](http://127.0.0.1:8000/docs)
-      
-      http://127.0.0.1:8000/docs
+  - 存档数据将会挂在到当前目录${PWD}/data
+  - 如果配置了 STEAM_API_KEY 且物理机网络能访问 steam，面板将支持搜索添加模组
 
-## 镜像
-- 默认
-  
-      docker pull ylei2023/dontstarvetogether:饥荒版本号
-- 国内
+- 面板地址
 
-      docker pull swr.cn-north-4.myhuaweicloud.com/ylei/dontstarvetogether:饥荒版本号
+  http://127.0.0.1:8000
 
-- [构建](https://github.com/ylei2024/dontstarve-server-docker)
-  
-      https://github.com/ylei2024/dontstarve-server-docker
+- 后端接口文档
 
-## 其他
-- 查询饥荒版本号接口
+  http://127.0.0.1:8001/docs
 
-      https://api.steamcmd.net/v1/info/343050
+## 相关项目地址
 
+- wendy-plane 前端
 
-## 感谢
-- 感谢superjump22提供的镜像构建参考, 项目地址：https://github.com/superjump22/dontstarve-server-docker
+  https://github.com/wendy-plane/wendy-plane
+
+- wendy-plane 后端
+
+  https://github.com/wendy-plane/wendy
+
+- 饥荒镜像构建
+
+  https://github.com/ylei2024/dontstarve-server-docker
+
+- 饥荒群机器人
+
+  https://github.com/wendy-plane/dst-bot
+
+## TODO
+
+- 大厅查询
