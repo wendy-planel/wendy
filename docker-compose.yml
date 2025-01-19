@@ -1,9 +1,6 @@
 services:
   wendy-apiserver:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: wendy-apiserver:${IMAGE_TAG:-latest}
+    image: ylei2023/wendy-apiserver:latest
     volumes:
       - ${PWD}/data:${PWD}/data
       - /var/run/docker.sock:/var/run/docker.sock
@@ -12,6 +9,9 @@ services:
       - DST_IMAGE=${DST_IMAGE:-swr.cn-north-4.myhuaweicloud.com/ylei/dontstarvetogether}
       - DATABASE_URL=sqlite:${PWD}/data/wendy.sqlite3
       - STEAM_API_KEY=${STEAM_API_KEY}
-    ports:
-      - "8000:8000"
     restart: always
+  wendy-plane:
+    image: ylei2023/wendy-plane:latest
+    restart: always
+    ports:
+      - "80:80"

@@ -217,6 +217,8 @@ async def download_mods(
         str: mods路径.
     """
     mod_path = os.path.join(path, "content/322330")
+    if not os.path.exists(mod_path):
+        os.makedirs(mod_path)
     if not mods:
         return mod_path
     details = await steamcmd.publishedfiledetails(mods)

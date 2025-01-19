@@ -94,7 +94,7 @@ async def search_mods(
         List[dict]: 模组.
     """
     async with httpx.AsyncClient(timeout=10) as client:
-        url = "https://api.steampowered.com/IPublishedFileService/QueryFiles/v1/"
+        url = "http://api.steampowered.com/IPublishedFileService/QueryFiles/v1/"
         params = {
             "appid": appid,
             "page": page,
