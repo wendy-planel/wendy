@@ -334,9 +334,12 @@ async def deploy(
     if cluster.ini.master_port == -1:
         cluster.ini.master_port = port
     for world in cluster.world:
-        world.server_port = port + 1
-        world.master_server_port = port + 2
-        world.authentication_port = port + 3
+        if world.server_port == -1:
+            world.server_port = port + 1
+        if world.master_server_port == -1:
+            world.master_server_port = port + 2
+        if world.authentication_port == -1:
+            world.authentication_port = port + 3
         port += 3
     archive_path = get_archive_path(id)
     cluster.save(archive_path)

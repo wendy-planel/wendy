@@ -122,14 +122,12 @@ async def restart(id: int):
 )
 @atomic(connection_name="default")
 async def upload(
-    master_port: int = Body(default=-1),
     docker_api: str = Body(default=DOCKER_API_DEFAULT),
     file: UploadFile = File(),
 ):
     """上传文件部署.
 
     Args:
-        master_port (int, optional): master端口默认-1代表自动生成.
         docker_api (str, optional): docker api.
         file (UploadFile): 存档文件.
     """
@@ -169,7 +167,12 @@ async def upload(
             archive_path=cluster_path,
             docker=docker,
         )
-    cluster.ini.master_port = master_port
+    # 将端口号重置为-1, 将会自动生成端口, 防止端口占用
+    cluster.ini.master_port = -1
+    for world in cluster.world:
+        world.server_port = -1
+        world.master_server_port = -1
+        world.authentication_port = -1
     await agent.deploy(deploy.id, cluster)
     deploy.cluster = cluster.model_dump()
     deploy.status = DeployStatus.running.value

@@ -22,12 +22,9 @@ async def download(id: int):
         docker_api = world.docker_api
     tar_file = await agent.download_archive(id, docker_api)
     tar_file.fileobj.seek(0)
-
-    # Create a generator that yields chunks from the file
     def file_chunk_generator(fileobj, chunk_size=8192):
         while chunk := fileobj.read(chunk_size):
             yield chunk
-
     return StreamingResponse(
         file_chunk_generator(tar_file.fileobj),
         media_type="application/x-tar",
