@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from wendy.api import deploy, cluster, console, mod
+from wendy.api import deploy, cluster, console, mod, stats
 
 
 router = APIRouter()
@@ -33,4 +33,10 @@ router.include_router(
     mod.router,
     prefix="/mod",
     tags=["模组"],
+)
+
+router.include_router(
+    stats.router,
+    prefix="/monitor",
+    tags=["资源消耗"],
 )

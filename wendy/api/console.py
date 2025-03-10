@@ -132,9 +132,7 @@ class LogFollow:
             transport = httpx.AsyncHTTPTransport(uds="/var/run/docker.sock")
             base_url = "http://docker"
         try:
-            async with httpx.AsyncClient(
-                transport=transport, base_url=base_url
-            ) as client:
+            async with httpx.AsyncClient(transport=transport, base_url=base_url) as client:
                 url = f"/containers/{world.container}/logs"
                 params = {
                     "stdout": True,
@@ -142,22 +140,10 @@ class LogFollow:
                     "follow": True,
                     "since": self.since,
                 }
-                line = ""
                 timeout = httpx.Timeout(None, connect=5)
-                async with client.stream(
-                    "GET",
-                    url,
-                    params=params,
-                    timeout=timeout,
-                ) as response:
-                    async for chunk in response.aiter_bytes():
-                        for ch in chunk.decode("utf-8"):
-                            if ch == "\n":
-                                message = {"key": key, "line": line.strip()}
-                                await self.queue.put(json.dumps(message))
-                                line = ""
-                            else:
-                                line += ch
+                async with client.stream("GET", url, params=params, timeout=timeout) as response:
+                    async for line in response.aiter_lines():
+                        await self.queue.put(json.dumps({"key": key, "data": line.strip()}))
         finally:
             async with self.lock:
                 if key in self.tasks:
@@ -169,7 +155,7 @@ class LogFollow:
             async for deploy in models.Deploy.filter(status=running):
                 cluster = Cluster.model_validate(deploy.cluster)
                 for index, world in enumerate(cluster.world):
-                    key = f"{deploy.id}_{index}"
+                    key = f"log_{deploy.id}_{index}"
                     if key not in self.tasks:
                         task = asyncio.create_task(self._read(key, world))
                         self.tasks[key] = task
