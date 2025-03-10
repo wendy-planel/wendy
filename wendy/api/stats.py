@@ -63,7 +63,7 @@ class Stats:
             async for deploy in models.Deploy.filter(status=running):
                 cluster = Cluster.model_validate(deploy.cluster)
                 for index, world in enumerate(cluster.world):
-                    key = f"monitor_{deploy.id}_{index}"
+                    key = f"stats_{deploy.id}_{index}"
                     if key not in self.tasks:
                         task = asyncio.create_task(self._read(key, world))
                         self.tasks[key] = task
