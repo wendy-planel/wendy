@@ -37,6 +37,6 @@ router.include_router(
 
 router.include_router(
     stats.router,
-    prefix="/monitor",
+    prefix="/stats",
     tags=["资源消耗"],
 )
