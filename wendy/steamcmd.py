@@ -3,19 +3,37 @@ from typing import List, Dict
 import os
 
 import httpx
+import aiodocker
 
-from wendy.settings import STEAM_API_KEY
+from wendy.settings import STEAM_API_KEY, DST_IMAGE
+
+
+global buildid
+buildid = ""
 
 
 async def dst_version() -> str:
     """获取dst版本号.
 
     Returns:
-        str: dst版本号
+        str: dst版本号.
     """
-    async with httpx.AsyncClient() as client:
-        response = await client.get("https://api.steamcmd.net/v1/info/343050")
-    return response.json()["data"]["343050"]["depots"]["branches"]["public"]["buildid"]
+    global buildid
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get("https://api.steamcmd.net/v1/info/343050")
+            buildid = response.json()["data"]["343050"]["depots"]["branches"]["public"]["buildid"]
+    except Exception:
+        async with aiodocker.Docker() as docker:
+            images = await docker.images.list()
+            tag_max = 0
+            for item in images:
+                for tag in item["RepoTags"]:
+                    if DST_IMAGE in tag:
+                        tag_max = max(tag_max, int(tag.split(":")[-1]))
+            if tag_max:
+                buildid = str(tag_max)
+    return buildid
 
 
 def parse_mods_last_updated(acf_file_path: str) -> Dict[str, str]:
