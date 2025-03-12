@@ -276,13 +276,23 @@ class Cluster(BaseModel):
         cluster_path: str,
         docker_api: str,
     ) -> "Cluster":
-        with open(os.path.join(cluster_path, "cluster_token.txt"), "r") as file:
-            cluster_token = file.read()
+        cluster_token = ""
+        cluster_token_path = os.path.join(cluster_path, "cluster_token.txt")
+        if os.path.exists(cluster_token_path):
+            with open(cluster_token_path, "r") as file:
+                cluster_token = file.read()
         ini = ClusterIni.load_from_file(os.path.join(cluster_path, "cluster.ini"))
         master = ClusterWorld.load_from_file(cluster_path, "Master", docker_api)
         caves = ClusterWorld.load_from_file(cluster_path, "Caves", docker_api)
-        return cls(
+        cluster = cls(
             ini=ini,
             world=[master, caves],
             cluster_token=cluster_token,
         )
+        # 将端口号重置为-1, 防止端口占用
+        cluster.ini.master_port = -1
+        for world in cluster.world:
+            world.server_port = -1
+            world.master_server_port = -1
+            world.authentication_port = -1
+        return cluster

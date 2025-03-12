@@ -51,6 +51,7 @@ async def update(
     id: int,
     cluster: Cluster = Body(),
 ):
+    # TODO 如果修改的是docker_api需要同步存档
     deploy = await models.Deploy.get(id=id)
     cluster = await agent.deploy(deploy.id, cluster)
     deploy.cluster = cluster.model_dump()
@@ -120,7 +121,6 @@ async def restart(id: int):
     "/upload",
     description="上传部署",
 )
-@atomic(connection_name="default")
 async def upload(
     docker_api: str = Body(default=DOCKER_API_DEFAULT),
     file: UploadFile = File(),
@@ -133,7 +133,6 @@ async def upload(
     """
     filename = file.filename
     file_content = await file.read(1_073_741_824)
-    # 切分上传文件后缀
     _, suffix = os.path.splitext(filename)
     if suffix == ".zip":
         temp_dir = tempfile.mkdtemp()
@@ -145,12 +144,11 @@ async def upload(
             tar_ref.extractall(temp_dir)
     else:
         raise ValueError(f"Unsupported {suffix}")
-    target_file = "cluster.ini"
     target_path = None
+    target_file = "cluster.ini"
     for dirpath, _, filenames in os.walk(temp_dir):
         if target_file in filenames:
             target_path = dirpath
-    # 无法定位到目录
     if target_path is None:
         raise ValueError(f"not found {target_file}")
     cluster = Cluster.create_from_dir(target_path, docker_api)
@@ -158,7 +156,6 @@ async def upload(
         cluster=cluster.model_dump(),
         status=DeployStatus.pending.value,
     )
-    # 读取当前
     cluster_path = tempfile.mkdtemp()
     shutil.move(target_path, os.path.join(cluster_path, "Cluster_1"))
     async with aiodocker.Docker(docker_api) as docker:
@@ -167,14 +164,4 @@ async def upload(
             archive_path=cluster_path,
             docker=docker,
         )
-    # 将端口号重置为-1, 将会自动生成端口, 防止端口占用
-    cluster.ini.master_port = -1
-    for world in cluster.world:
-        world.server_port = -1
-        world.master_server_port = -1
-        world.authentication_port = -1
-    await agent.deploy(deploy.id, cluster)
-    deploy.cluster = cluster.model_dump()
-    deploy.status = DeployStatus.running.value
-    await deploy.save()
     return deploy

@@ -330,6 +330,7 @@ async def deploy(
 ) -> Cluster:
     if version is None:
         version = await steamcmd.dst_version()
+    # TODO 这样自动生成端口有问题, 当ID超过600多的时候会超出端口范围
     port = 10000 + id * 100
     if cluster.ini.master_port == -1:
         cluster.ini.master_port = port
@@ -440,9 +441,7 @@ async def monitor():
                     continue
                 log.info(f"redeploy {item.id}: {version}")
                 cluster = await deploy(item.id, cluster, version=version)
-                await models.Deploy.filter(id=item.id).update(
-                    cluster=cluster.model_dump()
-                )
+                await models.Deploy.filter(id=item.id).update(cluster=cluster.model_dump())
         except Exception as e:
             log.exception(f"monitor error: {e}")
         finally:
