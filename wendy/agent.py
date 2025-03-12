@@ -1,3 +1,4 @@
+import shutil
 from typing import List
 
 import io
@@ -155,9 +156,14 @@ async def download_mods_by_fileurl(
                         zipinfo = file.getinfo(member)
                         zipinfo.filename = zipinfo.filename.replace("\\", "/")
                         file._extract_member(zipinfo, target_path, None)
-                mods.remove(mod_id)
-            except Exception as e:
-                log.warning(f"download_mods_by_fileurl error: {e}")
+                if mod_id in mods:
+                    mods.remove(mod_id)
+            except Exception:
+                import traceback
+
+                log.warning("download_mods_by_fileurl error")
+                log.warning(traceback.format_exc())
+                shutil.rmtree(target_path)
     return mods
 
 
@@ -284,7 +290,7 @@ async def deploy_world(
     docker: aiodocker.Docker,
     world: ClusterWorld,
 ):
-    container_name = f"dst_{world.name.lower()}_{id}"
+    container_name = f"dst_{world.type}_{id}_{world.id}"
     target_path = "/home/steam/dst/save"
     config = {
         "Image": image,

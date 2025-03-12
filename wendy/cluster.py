@@ -291,7 +291,8 @@ class Cluster(BaseModel):
         )
         # 将端口号重置为-1, 防止端口占用
         cluster.ini.master_port = -1
-        for world in cluster.world:
+        for index, world in enumerate(cluster.world):
+            world.id = str(index)
             world.server_port = -1
             world.master_server_port = -1
             world.authentication_port = -1

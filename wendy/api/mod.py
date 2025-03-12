@@ -19,7 +19,7 @@ class ModInfo(BaseModel):
     """模组modinfo.lua内容"""
 
     id: str
-    code: str
+    code: str | bytes
 
 
 @router.post(
@@ -35,13 +35,13 @@ async def read_modinfo(
     )
     data = []
     for mod_id in mods:
-        mod_info_path = os.path.join(mods_path, f"{mod_id}/modinfo.lua")
-        if not os.path.exists(mod_info_path):
-            code = ""
+        modinfo_path = os.path.join(mods_path, f"{mod_id}/modinfo.lua")
+        if not os.path.exists(modinfo_path):
+            code = b""
         else:
-            with open(mod_info_path, "r") as file:
+            with open(modinfo_path, "rb") as file:
                 code = file.read()
-        data.append(ModInfo(id=mod_id, code=code))
+        data.append(ModInfo(id=mod_id, code=code.decode(errors="ignore")))
     return data
 
 
