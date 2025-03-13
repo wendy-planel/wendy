@@ -243,12 +243,16 @@ class Cluster(BaseModel):
     def acf_file_path(self, path: str) -> str:
         return os.path.join(self.ugc_mods_path(path), "appworkshop_322330.acf")
 
-    def save_mods(self, path: str):
+    def mods_path(self, path: str):
         mods_path = os.path.join(path, self.mods_dirname)
         if not os.path.exists(mods_path):
             os.makedirs(mods_path)
-        self.save_mods_setup(mods_path)
+        return mods_path
+
+    def save_mods(self, path: str):
         self.ugc_mods_path(path)
+        mods_path = self.mods_path(path)
+        self.save_mods_setup(mods_path)
 
     def save_cluster_token(self, cluster_path: str) -> str:
         cluster_token_path = os.path.join(cluster_path, self.cluster_token_filename)
@@ -291,8 +295,7 @@ class Cluster(BaseModel):
         )
         # 将端口号重置为-1, 防止端口占用
         cluster.ini.master_port = -1
-        for index, world in enumerate(cluster.world):
-            world.id = str(index)
+        for world in cluster.world:
             world.server_port = -1
             world.master_server_port = -1
             world.authentication_port = -1

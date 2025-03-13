@@ -85,7 +85,7 @@ async def download_archive(
     return file
 
 
-async def filter_downloaded_mods(
+async def filter_downloaded_ugc_mods(
     mods: List[str],
     path: str,
     details: dict | None = None,
@@ -130,7 +130,7 @@ async def download_mods_by_fileurl(
 
     Args:
         mods (List[str]): 模组.
-        path (str): 保存路径(appworkshop_322330.acf同层级路径).
+        path (str): mods路径.
         details (dict | None): publishedfiledetails信息.
 
     Returns:
@@ -140,38 +140,48 @@ async def download_mods_by_fileurl(
         return []
     if details is None:
         details = await steamcmd.publishedfiledetails(mods)
+    ugc_mods = []
     fileurl_mods = []
     for mod in details["response"]["publishedfiledetails"]:
         mod_id = mod["publishedfileid"]
         if file_url := mod.get("file_url"):
             fileurl_mods.append((mod_id, file_url))
+        else:
+            ugc_mods.append(mod_id)
+    target_path = os.path.join(path, f"workshop-{mod_id}")
+    tmp_path = os.path.join(path, f"{mod_id}")
     async with httpx.AsyncClient(timeout=10) as client:
         for mod_id, file_url in fileurl_mods:
-            try:
-                r = await client.get(file_url)
-                target_path = os.path.join(path, "content/322330", mod_id)
-                with zipfile.ZipFile(io.BytesIO(r.content), "r") as file:
-                    members = file.namelist()
-                    for member in members:
-                        zipinfo = file.getinfo(member)
-                        zipinfo.filename = zipinfo.filename.replace("\\", "/")
-                        file._extract_member(zipinfo, target_path, None)
-                if mod_id in mods:
-                    mods.remove(mod_id)
-            except Exception:
-                import traceback
+            if os.path.exists(target_path):
+                continue
+            for _ in range(3):
+                try:
+                    response = await client.get(file_url)
+                    with zipfile.ZipFile(io.BytesIO(response.content), "r") as file:
+                        members = file.namelist()
+                        for member in members:
+                            zipinfo = file.getinfo(member)
+                            zipinfo.filename = zipinfo.filename.replace("\\", "/")
+                            file._extract_member(zipinfo, tmp_path, None)
+                    # 重命名文件夹
+                    os.rename(tmp_path, target_path)
+                    break
+                except Exception:
+                    import traceback
 
-                log.warning("download_mods_by_fileurl error")
-                log.warning(traceback.format_exc())
-                shutil.rmtree(target_path)
-    return mods
+                    log.warning("download_mods_by_fileurl error")
+                    log.warning(traceback.format_exc())
+                    shutil.rmtree(tmp_path)
+    return ugc_mods
 
 
 async def download_mods_by_steamcmd(
     mods: List[str],
     path: str,
+    details: dict,
     timeout: int = 3000,
 ):
+    mods = await filter_downloaded_ugc_mods(mods, path, details)
     cmd = ["+login", "anonymous"]
     for mod_id in mods:
         cmd.extend(["+workshop_download_item", "322330", mod_id])
@@ -222,38 +232,40 @@ async def download_mods(
     Returns:
         str: mods路径.
     """
-    mod_path = os.path.join(path, "content/322330")
+    mod_path = os.path.join(path, "mods")
+    ugc_path = os.path.join(path, "ugc_mods")
     if not os.path.exists(mod_path):
         os.makedirs(mod_path)
+    if not os.path.exists(ugc_path):
+        os.makedirs(ugc_path)
     if not mods:
         return mod_path
     details = await steamcmd.publishedfiledetails(mods)
-    mods = await filter_downloaded_mods(mods, path, details)
     if mods:
-        mods = await download_mods_by_fileurl(mods, path, details)
-    if mods:
-        await download_mods_by_steamcmd(mods, path)
-    return mod_path
+        ugc_mods = await download_mods_by_fileurl(mods, mod_path, details)
+    if ugc_mods:
+        await download_mods_by_steamcmd(ugc_mods, ugc_path, details)
+    return mod_path, ugc_path
 
 
-async def upload_archive(
+async def upload(
     id: str | int,
-    archive_path: str,
+    path: str,
     docker: aiodocker.Docker,
-) -> str:
-    """上传存档到挂载卷.
+    volume_name: str,
+):
+    """上传文件到挂载卷.
 
     Args:
         id (str | int): id.
         archive_path (str): 存档路径.
         docker (aiodocker.Docker): docker.
+        volume_name (str): 挂载卷名.
 
     Returns:
         str: 挂载卷名.
     """
-    container_name = f"wendy_busybox_{id}"
     await pull("busybox:latest", docker)
-    volume_name = f"wendy_{id}"
     volume_config = {
         "Name": volume_name,
         "Driver": "local",
@@ -270,35 +282,59 @@ async def upload_archive(
                 {
                     "Type": "volume",
                     "Source": volume_name,
-                    "Target": archive_path,
+                    "Target": path,
                 }
             ]
         },
     }
-    busybox = await docker.containers.create_or_replace(container_name, config)
+    busybox = await docker.containers.create_or_replace(volume_name, config)
     await busybox.start()
-    tar_stream = make_tarfile_in_memory(archive_path)
-    await busybox.put_archive(archive_path, tar_stream.read())
+    tar_stream = make_tarfile_in_memory(path)
+    await busybox.put_archive(path, tar_stream.read())
     await busybox.stop()
     return volume_name
 
 
-async def deploy_world(
+async def upload_archive(
     id: str | int,
+    archive_path: str,
+    docker: aiodocker.Docker,
+) -> str:
+    return await upload(id, archive_path, docker, f"wendy_{id}")
+
+
+async def upload_mods(
+    id: str | int,
+    mods_path: str,
+    docker: aiodocker.Docker,
+):
+    return await upload(id, mods_path, docker, f"wendy_mods_{id}")
+
+
+async def upload_ugc_mods(
+    id: str | int,
+    ugc_path: str,
+    docker: aiodocker.Docker,
+):
+    return await upload(id, ugc_path, docker, f"wendy_ugc_{id}")
+
+
+async def deploy_world(
+    container_name: str,
     image: str,
-    volume_name: str,
+    archive_volume: str,
+    mods_volume: str,
+    ugc_volume: str,
     docker: aiodocker.Docker,
     world: ClusterWorld,
 ):
-    container_name = f"dst_{world.type}_{id}_{world.id}"
-    target_path = "/home/steam/dst/save"
     config = {
         "Image": image,
         "RestartPolicy": {"Name": "always"},
         "Cmd": [
             "-skip_update_server_mods",
             "-ugc_directory",
-            f"{target_path}/ugc_mods",
+            "/home/steam/dst/game/ugc_mods",
             "-persistent_storage_root",
             "/home/steam/dst",
             "-conf_dir",
@@ -312,9 +348,19 @@ async def deploy_world(
             "Mounts": [
                 {
                     "Type": "volume",
-                    "Source": volume_name,
-                    "Target": target_path,
-                }
+                    "Source": archive_volume,
+                    "Target": "/home/steam/dst/save/Cluster_1",
+                },
+                {
+                    "Type": "volume",
+                    "Source": mods_volume,
+                    "Target": "/home/steam/dst/game/mods",
+                },
+                {
+                    "Type": "volume",
+                    "Source": ugc_volume,
+                    "Target": "/home/steam/dst/game/ugc_mods",
+                },
             ],
             "NetworkMode": "host",
         },
@@ -350,14 +396,24 @@ async def deploy(
         port += 3
     archive_path = get_archive_path(id)
     cluster.save(archive_path)
-    ugc_mods_path = cluster.ugc_mods_path(archive_path)
-    await download_mods(cluster.mods, ugc_mods_path)
-    for world in cluster.world:
+    await download_mods(cluster.mods, archive_path)
+    for index, world in enumerate(cluster.world):
         async with aiodocker.Docker(world.docker_api) as docker:
             image = DST_IMAGE + ":" + version
+            world.container = f"dst_{world.type.lower()}_{id}_{index}"
             await pull(image, docker)
-            volume_name = await upload_archive(id, archive_path, docker)
-            world.container = await deploy_world(id, image, volume_name, docker, world)
+            archive_volume = await upload_archive(id, f"{archive_path}/Cluster_1", docker)
+            mods_volume = await upload_mods(id, f"{archive_path}/mods", docker)
+            ugc_volume = await upload_ugc_mods(id, f"{archive_path}/ugc_mods", docker)
+            await deploy_world(
+                world.container,
+                image,
+                archive_volume,
+                mods_volume,
+                ugc_volume,
+                docker,
+                world,
+            )
             world.version = version
     return cluster
 
@@ -428,9 +484,19 @@ async def redeploy(
                 return True
     if not cluster.mods:
         return False
+    ugc = []
     archive_path = get_archive_path(id)
+    mods_path = cluster.mods_path(archive_path)
     ugc_mods_path = cluster.ugc_mods_path(archive_path)
-    if mods := await filter_downloaded_mods(cluster.mods, ugc_mods_path):
+    for mod in cluster.mods:
+        downloaded = False
+        for mod_dir in os.listdir(mods_path):
+            if mod in mod_dir:
+                downloaded = True
+                break
+        if not downloaded:
+            ugc.append(mod)
+    if mods := await filter_downloaded_ugc_mods(ugc, ugc_mods_path):
         log.info(f"cluster {id} update mods: {mods}")
         return True
     return False

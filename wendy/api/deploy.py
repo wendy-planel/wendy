@@ -156,12 +156,13 @@ async def upload(
         cluster=cluster.model_dump(),
         status=DeployStatus.pending.value,
     )
-    cluster_path = tempfile.mkdtemp()
-    shutil.move(target_path, os.path.join(cluster_path, "Cluster_1"))
+    temp_path = tempfile.mkdtemp()
+    archive_path = os.path.join(temp_path, "Cluster_1")
+    shutil.move(target_path, archive_path)
     async with aiodocker.Docker(docker_api) as docker:
         await agent.upload_archive(
             id=deploy.id,
-            archive_path=cluster_path,
+            archive_path=archive_path,
             docker=docker,
         )
     return deploy

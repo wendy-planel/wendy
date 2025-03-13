@@ -29,17 +29,22 @@ class ModInfo(BaseModel):
 async def read_modinfo(
     mods: List[str] = Body(),
 ) -> List[ModInfo]:
-    mods_path = await download_mods(
+    mod_path, ugc_path = await download_mods(
         mods=mods,
         path=os.path.join(GAME_ARCHIVE_PATH, "mods"),
     )
     data = []
+    code = b""
     for mod_id in mods:
-        modinfo_path = os.path.join(mods_path, f"{mod_id}/modinfo.lua")
-        if not os.path.exists(modinfo_path):
-            code = b""
-        else:
-            with open(modinfo_path, "rb") as file:
+        target_path = None
+        path1 = os.path.join(mod_path, f"workshop-{mod_id}/modinfo.lua")
+        path2 = os.path.join(ugc_path, f"{mod_id}/modinfo.lua")
+        if os.path.exists(path1):
+            target_path = path1
+        elif os.path.exists(path2):
+            target_path = path2
+        if target_path:
+            with open(target_path, "rb") as file:
                 code = file.read()
         data.append(ModInfo(id=mod_id, code=code.decode(errors="ignore")))
     return data
