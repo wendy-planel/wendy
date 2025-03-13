@@ -416,6 +416,7 @@ async def redeploy(
         version = await steamcmd.dst_version()
     for world in cluster.world:
         if world.version != version:
+            log.info(f"cluster {id} update version: {version}")
             return True
         async with aiodocker.Docker(world.docker_api) as docker:
             try:
@@ -423,13 +424,14 @@ async def redeploy(
                 status = container._container.get("State", {}).get("Status")
                 assert status == "running"
             except Exception:
+                log.info(f"cluster {id} status exception redeploy")
                 return True
     if not cluster.mods:
         return False
     archive_path = get_archive_path(id)
     ugc_mods_path = cluster.ugc_mods_path(archive_path)
     if mods := await filter_downloaded_mods(cluster.mods, ugc_mods_path):
-        log.info(f"cluster {id} mods {mods} update")
+        log.info(f"cluster {id} update mods: {mods}")
         return True
     return False
 
@@ -445,7 +447,6 @@ async def monitor():
                 cluster = Cluster.model_validate(item.cluster)
                 if not await redeploy(item.id, cluster, version):
                     continue
-                log.info(f"redeploy {item.id}: {version}")
                 cluster = await deploy(item.id, cluster, version=version)
                 await models.Deploy.filter(id=item.id).update(cluster=cluster.model_dump())
         except Exception as e:

@@ -207,7 +207,7 @@ class Cluster(BaseModel):
     def mods(self) -> List[str]:
         mods = set()
         for world in self.world:
-            for mod_id in re.findall(r"workshop-([0-9]+)", world.modoverrides):
+            for mod_id in re.findall(r'\["workshop-([0-9]+)"]=', world.modoverrides):
                 mods.add(mod_id)
         return list(mods)
 
