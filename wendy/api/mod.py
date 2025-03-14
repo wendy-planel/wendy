@@ -38,7 +38,7 @@ async def read_modinfo(
     for mod_id in mods:
         target_path = None
         path1 = os.path.join(mod_path, f"workshop-{mod_id}/modinfo.lua")
-        path2 = os.path.join(ugc_path, f"{mod_id}/modinfo.lua")
+        path2 = os.path.join(ugc_path, f"content/322330/{mod_id}/modinfo.lua")
         if os.path.exists(path1):
             target_path = path1
         elif os.path.exists(path2):
