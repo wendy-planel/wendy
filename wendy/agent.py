@@ -14,9 +14,9 @@ import aiodocker
 import aiodocker.utils
 import aiodocker.multiplexed
 
+from wendy.cluster import Cluster
 from wendy import models, steamcmd
 from wendy.constants import DeployStatus
-from wendy.cluster import Cluster, ClusterWorld
 from wendy.settings import (
     DST_IMAGE,
     GAME_ARCHIVE_PATH,
@@ -86,9 +86,8 @@ async def download_archive(
 
 
 async def filter_downloaded_ugc_mods(
-    mods: List[str],
     path: str,
-    details: dict | None = None,
+    details: dict,
 ) -> List[str]:
     """过滤掉已下载且最新模组, 返回任需要下载的模组列表.
 
@@ -100,62 +99,48 @@ async def filter_downloaded_ugc_mods(
     Returns:
         List[str]: 过滤后任需要下载的模组列表.
     """
-    if not mods:
-        return []
-    if details is None:
-        details = await steamcmd.publishedfiledetails(mods)
-    mods_info = {}
-    downloaded = {}
+    mods_updated = {}
+    mods_downloaded = {}
     residue_mods = []
     for mod in details["response"]["publishedfiledetails"]:
-        if time_updated := mod.get("time_updated"):
-            mods_info[mod["publishedfileid"]] = str(time_updated)
-    acf_file_path = os.path.join(path, "appworkshop_322330.acf")
-    acf_mods_info = steamcmd.parse_mods_last_updated(acf_file_path)
+        if not mod.get("file_url") and (time_updated := mod.get("time_updated")):
+            mods_updated[mod["publishedfileid"]] = str(time_updated)
     ugc_content_path = os.path.join(path, "content/322330")
+    acf_mods = steamcmd.parse_acf_file(os.path.join(path, "appworkshop_322330.acf"))
     if os.path.exists(ugc_content_path):
         for mod_id in os.listdir(ugc_content_path):
-            if mod_id in acf_mods_info:
-                downloaded[mod_id] = acf_mods_info[mod_id]
-    for mod_id in mods_info:
-        if mod_id not in downloaded or (mods_info[mod_id] != downloaded[mod_id]):
+            if mod_id in acf_mods:
+                mods_downloaded[mod_id] = acf_mods[mod_id]
+    for mod_id in mods_updated:
+        if mod_id not in mods_downloaded or (mods_updated[mod_id] != mods_downloaded[mod_id]):
             residue_mods.append(mod_id)
     return residue_mods
 
 
 async def download_mods_by_fileurl(
-    mods: List[str],
     path: str,
-    details: dict | None = None,
+    details: dict,
 ) -> List[str]:
     """通过模组的详细信息接口返回的file_url下载模组.
 
     Args:
-        mods (List[str]): 模组.
         path (str): mods路径.
-        details (dict | None): publishedfiledetails信息.
+        details (dict): publishedfiledetails信息.
 
     Returns:
         List[str]: 剩余未下载模组.
     """
-    if not mods:
-        return []
-    if details is None:
-        details = await steamcmd.publishedfiledetails(mods)
-    ugc_mods = []
     fileurl_mods = []
     for mod in details["response"]["publishedfiledetails"]:
         mod_id = mod["publishedfileid"]
         if file_url := mod.get("file_url"):
             fileurl_mods.append((mod_id, file_url))
-        else:
-            ugc_mods.append(mod_id)
-    target_path = os.path.join(path, f"workshop-{mod_id}")
-    tmp_path = os.path.join(path, f"{mod_id}")
     async with httpx.AsyncClient(timeout=10) as client:
         for mod_id, file_url in fileurl_mods:
+            target_path = os.path.join(path, f"workshop-{mod_id}")
+            tmp_path = os.path.join(path, f"{mod_id}")
             if os.path.exists(target_path):
-                continue
+                shutil.rmtree(target_path)
             for _ in range(3):
                 try:
                     response = await client.get(file_url)
@@ -166,7 +151,7 @@ async def download_mods_by_fileurl(
                             zipinfo.filename = zipinfo.filename.replace("\\", "/")
                             file._extract_member(zipinfo, tmp_path, None)
                     # 重命名文件夹
-                    os.rename(tmp_path, target_path)
+                    shutil.move(tmp_path, target_path)
                     break
                 except Exception:
                     import traceback
@@ -174,18 +159,18 @@ async def download_mods_by_fileurl(
                     log.warning("download_mods_by_fileurl error")
                     log.warning(traceback.format_exc())
                     shutil.rmtree(tmp_path)
-    return ugc_mods
 
 
 async def download_mods_by_steamcmd(
-    mods: List[str],
     path: str,
     details: dict,
     timeout: int = 3000,
 ):
-    mods = await filter_downloaded_ugc_mods(mods, path, details)
+    filter_mods = await filter_downloaded_ugc_mods(path, details)
+    if len(filter_mods) == 0:
+        return
     cmd = ["+login", "anonymous"]
-    for mod_id in mods:
+    for mod_id in filter_mods:
         cmd.extend(["+workshop_download_item", "322330", mod_id])
     cmd.append("+quit")
     image = "steamcmd/steamcmd:latest"
@@ -241,17 +226,14 @@ async def download_mods(
     if not os.path.exists(ugc_path):
         os.makedirs(ugc_path)
     if not mods:
-        return mod_path
+        return mod_path, ugc_path
     details = await steamcmd.publishedfiledetails(mods)
-    if mods:
-        ugc_mods = await download_mods_by_fileurl(mods, mod_path, details)
-    if ugc_mods:
-        await download_mods_by_steamcmd(ugc_mods, ugc_path, details)
+    await download_mods_by_fileurl(mod_path, details)
+    await download_mods_by_steamcmd(ugc_path, details)
     return mod_path, ugc_path
 
 
 async def upload(
-    id: str | int,
     path: str,
     docker: aiodocker.Docker,
     volume_name: str,
@@ -302,7 +284,7 @@ async def upload_archive(
     archive_path: str,
     docker: aiodocker.Docker,
 ) -> str:
-    return await upload(id, archive_path, docker, f"wendy_{id}")
+    return await upload(archive_path, docker, f"wendy_{id}")
 
 
 async def upload_mods(
@@ -310,7 +292,7 @@ async def upload_mods(
     mods_path: str,
     docker: aiodocker.Docker,
 ):
-    return await upload(id, mods_path, docker, f"wendy_mods_{id}")
+    return await upload(mods_path, docker, f"wendy_mods_{id}")
 
 
 async def upload_ugc_mods(
@@ -318,17 +300,62 @@ async def upload_ugc_mods(
     ugc_path: str,
     docker: aiodocker.Docker,
 ):
-    return await upload(id, ugc_path, docker, f"wendy_ugc_{id}")
+    return await upload(ugc_path, docker, f"wendy_ugc_{id}")
 
 
-async def deploy_world(
+async def update_mods(
     container_name: str,
     image: str,
-    archive_volume: str,
     mods_volume: str,
     ugc_volume: str,
     docker: aiodocker.Docker,
-    world: ClusterWorld,
+    timeout: int = 300,
+):
+    config = {
+        "Image": image,
+        "RestartPolicy": {"Name": "always"},
+        "Cmd": [
+            "-only_update_server_mods",
+            "-ugc_directory",
+            "/home/steam/dst/game/ugc_mods",
+        ],
+        "HostConfig": {
+            "Mounts": [
+                {
+                    "Type": "volume",
+                    "Source": mods_volume,
+                    "Target": "/home/steam/dst/game/mods",
+                },
+                {
+                    "Type": "volume",
+                    "Source": ugc_volume,
+                    "Target": "/home/steam/dst/game/ugc_mods",
+                },
+            ],
+            "NetworkMode": "host",
+        },
+    }
+    container = await docker.containers.create_or_replace(name=container_name, config=config)
+    await container.start()
+    while timeout > 0:
+        container = await docker.containers.get(container_name)
+        show = await container.show()
+        if show["State"]["Status"] == "exited":
+            break
+        else:
+            timeout -= 3
+            await asyncio.sleep(3)
+    return container_name
+
+
+async def deploy_world(
+    docker: aiodocker.Docker,
+    image: str,
+    container_name: str,
+    archive_volume: str,
+    mods_volume: str,
+    ugc_volume: str,
+    world_type: str,
 ):
     config = {
         "Image": image,
@@ -344,7 +371,7 @@ async def deploy_world(
             "-cluster",
             "Cluster_1",
             "-shard",
-            world.type,
+            world_type,
         ],
         "HostConfig": {
             "Mounts": [
@@ -369,10 +396,7 @@ async def deploy_world(
         "Tty": True,
         "OpenStdin": True,
     }
-    container = await docker.containers.create_or_replace(
-        name=container_name,
-        config=config,
-    )
+    container = await docker.containers.create_or_replace(name=container_name, config=config)
     await container.start()
     return container_name
 
@@ -384,39 +408,35 @@ async def deploy(
 ) -> Cluster:
     if version is None:
         version = await steamcmd.dst_version()
-    # TODO 这样自动生成端口有问题, 当ID超过600多的时候会超出端口范围
-    port = 10000 + id * 100
-    if cluster.ini.master_port == -1:
-        cluster.ini.master_port = port
-    for world in cluster.world:
-        if world.server_port == -1:
-            world.server_port = port + 1
-        if world.master_server_port == -1:
-            world.master_server_port = port + 2
-        if world.authentication_port == -1:
-            world.authentication_port = port + 3
-        port += 3
-    archive_path = get_archive_path(id)
-    cluster.save(archive_path)
-    await download_mods(cluster.mods, archive_path)
+    image = DST_IMAGE + ":" + version
+    cluster.auto_port(id)
+    path = get_archive_path(id)
+    cluster.save(path)
+    await download_mods(cluster.mods, path)
+    tasks = {}
     for index, world in enumerate(cluster.world):
-        async with aiodocker.Docker(world.docker_api) as docker:
-            image = DST_IMAGE + ":" + version
-            world.container = f"dst_{world.type.lower()}_{id}_{index}"
+        docker_api = world.docker_api
+        if docker_api not in tasks:
+            tasks[docker_api] = []
+        world.version = version
+        world.container = f"dst_{world.type.lower()}_{id}_{index}"
+        tasks[docker_api].append(world)
+    for docker_api in tasks:
+        async with aiodocker.Docker(docker_api) as docker:
             await pull(image, docker)
-            archive_volume = await upload_archive(id, f"{archive_path}/Cluster_1", docker)
-            mods_volume = await upload_mods(id, f"{archive_path}/mods", docker)
-            ugc_volume = await upload_ugc_mods(id, f"{archive_path}/ugc_mods", docker)
-            await deploy_world(
-                world.container,
-                image,
-                archive_volume,
-                mods_volume,
-                ugc_volume,
-                docker,
-                world,
-            )
-            world.version = version
+            archive_volume = await upload_archive(id, f"{path}/Cluster_1", docker)
+            mods_volume = await upload_mods(id, f"{path}/mods", docker)
+            ugc_volume = await upload_ugc_mods(id, f"{path}/ugc_mods", docker)
+            for world in tasks[docker_api]:
+                await deploy_world(
+                    docker,
+                    image,
+                    world.container,
+                    archive_volume,
+                    mods_volume,
+                    ugc_volume,
+                    world.type,
+                )
     return cluster
 
 
@@ -486,19 +506,11 @@ async def redeploy(
                 return True
     if not cluster.mods:
         return False
-    ugc = []
     archive_path = get_archive_path(id)
-    mods_path = cluster.mods_path(archive_path)
     ugc_mods_path = cluster.ugc_mods_path(archive_path)
-    for mod in cluster.mods:
-        downloaded = False
-        for mod_dir in os.listdir(mods_path):
-            if mod in mod_dir:
-                downloaded = True
-                break
-        if not downloaded:
-            ugc.append(mod)
-    if mods := await filter_downloaded_ugc_mods(ugc, ugc_mods_path):
+    ugc_content_path = os.path.join(ugc_mods_path, "content/322330")
+    details = await steamcmd.publishedfiledetails(os.listdir(ugc_content_path))
+    if mods := await filter_downloaded_ugc_mods(ugc_mods_path, details):
         log.info(f"cluster {id} update mods: {mods}")
         return True
     return False

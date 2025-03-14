@@ -300,3 +300,16 @@ class Cluster(BaseModel):
             world.master_server_port = -1
             world.authentication_port = -1
         return cluster
+
+    def auto_port(self, id: int):
+        port = 10000 + id * 100
+        if self.ini.master_port == -1:
+            self.ini.master_port = port
+        for world in self.world:
+            if world.server_port == -1:
+                world.server_port = port + 1
+            if world.master_server_port == -1:
+                world.master_server_port = port + 2
+            if world.authentication_port == -1:
+                world.authentication_port = port + 3
+            port += 3

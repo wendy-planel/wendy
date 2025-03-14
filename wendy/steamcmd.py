@@ -1,6 +1,7 @@
 from typing import List, Dict
 
 import os
+import time
 
 import httpx
 import aiodocker
@@ -8,7 +9,7 @@ import aiodocker
 from wendy.settings import STEAM_API_KEY, DST_IMAGE
 
 
-global buildid
+cache = {}
 buildid = ""
 
 
@@ -36,7 +37,7 @@ async def dst_version() -> str:
     return buildid
 
 
-def parse_mods_last_updated(acf_file_path: str) -> Dict[str, str]:
+def parse_acf_file(acf_file_path: str) -> Dict[str, str]:
     """解析acf文件获取模组最后一次更新时间.
 
     Args:
@@ -81,6 +82,11 @@ def parse_mods_last_updated(acf_file_path: str) -> Dict[str, str]:
 
 
 async def publishedfiledetails(mods: List[str]) -> dict:
+    global cache
+    key = ",".join(mods)
+    now = int(time.time())
+    if key in cache and (now - cache[key][0]) > 1800:
+        return cache[key][1]
     url = "http://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/"
     post_data = {
         "itemcount": len(mods),
@@ -89,7 +95,9 @@ async def publishedfiledetails(mods: List[str]) -> dict:
         post_data[f"publishedfileids[{i}]"] = mods[i]
     async with httpx.AsyncClient() as client:
         response = await client.post(url, data=post_data)
-    return response.json()
+    data = response.json()
+    cache[key] = [now, data]
+    return data
 
 
 async def search_mods(

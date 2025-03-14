@@ -1,6 +1,8 @@
 import os
 
+
 APP_NAME = "wendy"
+DEBUG = os.environ.get("DEBUG")
 GAME_ARCHIVE_PATH = os.environ.get("GAME_ARCHIVE_PATH")
 DOCKER_API_DEFAULT = os.environ.get(
     "DOCKER_API_DEFAULT",
