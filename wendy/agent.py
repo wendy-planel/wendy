@@ -427,6 +427,7 @@ async def deploy(
             archive_volume = await upload_archive(id, f"{path}/Cluster_1", docker)
             mods_volume = await upload_mods(id, f"{path}/mods", docker)
             ugc_volume = await upload_ugc_mods(id, f"{path}/ugc_mods", docker)
+            await update_mods(f"dst_update_mods_{id}", image, mods_volume, ugc_volume, docker)
             for world in tasks[docker_api]:
                 await deploy_world(
                     docker,
