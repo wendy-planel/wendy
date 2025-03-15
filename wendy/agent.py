@@ -22,7 +22,8 @@ from wendy.settings import (
     GAME_ARCHIVE_PATH,
 )
 
-
+# 下载模组文件锁
+lock = asyncio.Lock()
 log = structlog.get_logger()
 
 
@@ -137,28 +138,25 @@ async def download_mods_by_fileurl(
             fileurl_mods.append((mod_id, file_url))
     async with httpx.AsyncClient(timeout=10) as client:
         for mod_id, file_url in fileurl_mods:
-            target_path = os.path.join(path, f"workshop-{mod_id}")
-            tmp_path = os.path.join(path, f"{mod_id}")
-            if os.path.exists(target_path):
-                shutil.rmtree(target_path)
-            for _ in range(3):
-                try:
-                    response = await client.get(file_url)
-                    with zipfile.ZipFile(io.BytesIO(response.content), "r") as file:
-                        members = file.namelist()
-                        for member in members:
-                            zipinfo = file.getinfo(member)
-                            zipinfo.filename = zipinfo.filename.replace("\\", "/")
-                            file._extract_member(zipinfo, tmp_path, None)
-                    # 重命名文件夹
-                    shutil.move(tmp_path, target_path)
-                    break
-                except Exception:
-                    import traceback
+            async with lock:
+                target_path = os.path.join(path, f"workshop-{mod_id}")
+                if os.path.exists(target_path):
+                    shutil.rmtree(target_path)
+                for _ in range(3):
+                    try:
+                        response = await client.get(file_url)
+                        with zipfile.ZipFile(io.BytesIO(response.content), "r") as file:
+                            members = file.namelist()
+                            for member in members:
+                                zipinfo = file.getinfo(member)
+                                zipinfo.filename = zipinfo.filename.replace("\\", "/")
+                                file._extract_member(zipinfo, target_path, None)
+                        break
+                    except Exception:
+                        import traceback
 
-                    log.warning("download_mods_by_fileurl error")
-                    log.warning(traceback.format_exc())
-                    shutil.rmtree(tmp_path)
+                        log.warning("download_mods_by_fileurl error")
+                        log.warning(traceback.format_exc())
 
 
 async def download_mods_by_steamcmd(
@@ -518,20 +516,24 @@ async def redeploy(
 
 
 async def monitor():
-    """当版本更新时，重新部署所有容器"""
+    # TODO 这里会和接口处的状态修改冲突, 没想到好的解决办法, 只能说以期望的状态运行
     while True:
         try:
             version = await steamcmd.dst_version()
-            log.info(f"[monitor] 最新镜像: {version}")
-            running = DeployStatus.running.value
-            async for item in models.Deploy.filter(status=running):
+            async for item in models.Deploy.all():
                 cluster = Cluster.model_validate(item.cluster)
-                if not await redeploy(item.id, cluster, version):
-                    continue
-                cluster = await deploy(item.id, cluster, version=version)
-                await models.Deploy.filter(id=item.id).update(cluster=cluster.model_dump())
-        except Exception as e:
-            log.exception(f"monitor error: {e}")
+                if item.status in (DeployStatus.pending.value, DeployStatus.stop.value):
+                    await stop(cluster)
+                else:
+                    if await redeploy(item.id, cluster, version):
+                        cluster = await deploy(item.id, cluster, version=version)
+                        await models.Deploy.filter(id=item.id).update(
+                            cluster=cluster.model_dump(),
+                        )
+        except Exception:
+            import traceback
+
+            log.exception(traceback.format_exc())
         finally:
             await asyncio.sleep(60 * 60)
 

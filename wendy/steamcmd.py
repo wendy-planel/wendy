@@ -43,12 +43,13 @@ async def dst_version() -> str:
 
 async def publishedfiledetails(mods: List[str]) -> dict:
     global cache
+    mods.sort()
     key = ",".join(mods)
     now = int(time.time())
     async with cache_lock:
-        for key in list(cache.keys()):
-            if (now - cache[key][0]) > 1800:
-                cache.pop(key)
+        for item in list(cache.keys()):
+            if (now - cache[item][0]) > 1800:
+                cache.pop(item)
         if key in cache:
             return cache[key][1]
         url = "http://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/"
