@@ -28,7 +28,8 @@ async def lifespan(app: FastAPI):
         config=TORTOISE_ORM,
         add_exception_handlers=False,
     )
-    asyncio.create_task(agent.monitor())
+    if not DEBUG:
+        asyncio.create_task(agent.monitor())
     yield
 
 

@@ -121,7 +121,7 @@ async def filter_downloaded_ugc_mods(
 async def download_mods_by_fileurl(
     path: str,
     details: dict,
-) -> List[str]:
+) -> dict:
     """通过模组的详细信息接口返回的file_url下载模组.
 
     Args:
@@ -129,13 +129,16 @@ async def download_mods_by_fileurl(
         details (dict): publishedfiledetails信息.
 
     Returns:
-        List[str]: 剩余未下载模组.
+        dict: {mod_id: mod_path, ...}.
     """
+    if not os.path.exists(path):
+        os.makedirs(path)
     fileurl_mods = []
     for mod in details["response"]["publishedfiledetails"]:
         mod_id = mod["publishedfileid"]
         if file_url := mod.get("file_url"):
             fileurl_mods.append((mod_id, file_url))
+    mods_path = {}
     async with httpx.AsyncClient(timeout=10) as client:
         for mod_id, file_url in fileurl_mods:
             async with lock:
@@ -151,12 +154,14 @@ async def download_mods_by_fileurl(
                                 zipinfo = file.getinfo(member)
                                 zipinfo.filename = zipinfo.filename.replace("\\", "/")
                                 file._extract_member(zipinfo, target_path, None)
+                        mods_path[mod_id] = target_path
                         break
                     except Exception:
                         import traceback
 
                         log.warning("download_mods_by_fileurl error")
                         log.warning(traceback.format_exc())
+        return mods_path
 
 
 async def download_mods_by_steamcmd(
@@ -164,71 +169,72 @@ async def download_mods_by_steamcmd(
     details: dict,
     timeout: int = 3000,
 ):
+    mods_path = {}
+    if not os.path.exists(path):
+        os.makedirs(path)
     filter_mods = await filter_downloaded_ugc_mods(path, details)
-    if len(filter_mods) == 0:
-        return
-    cmd = ["+login", "anonymous"]
-    for mod_id in filter_mods:
-        cmd.extend(["+workshop_download_item", "322330", mod_id])
-    cmd.append("+quit")
-    image = "steamcmd/steamcmd:latest"
-    container_name = f"dst_download_mods_{uuid.uuid4()}"
-    async with aiodocker.Docker() as docker:
-        await pull(image, docker)
-        config = {
-            "Image": image,
-            "RestartPolicy": {"Name": "no"},
-            "Cmd": cmd,
-            "HostConfig": {
-                "Binds": [
-                    f"{path}:/root/.local/share/Steam/steamapps/workshop",
-                ],
-                "NetworkMode": "host",
-            },
-        }
-        container = await docker.containers.create_or_replace(
-            name=container_name,
-            config=config,
-        )
-        await container.start()
-        while timeout > 0:
-            container = await docker.containers.get(container_name)
-            info = await container.show()
-            if info["State"]["Status"] == "exited":
-                break
-            else:
-                timeout -= 3
-                await asyncio.sleep(3)
-        await container.delete()
+    if filter_mods:
+        cmd = ["+login", "anonymous"]
+        for mod_id in filter_mods:
+            cmd.extend(["+workshop_download_item", "322330", mod_id])
+        cmd.append("+quit")
+        image = "steamcmd/steamcmd:latest"
+        container_name = f"dst_download_mods_{uuid.uuid4()}"
+        async with aiodocker.Docker() as docker:
+            await pull(image, docker)
+            config = {
+                "Image": image,
+                "RestartPolicy": {"Name": "no"},
+                "Cmd": cmd,
+                "HostConfig": {
+                    "Binds": [
+                        f"{path}:/root/.local/share/Steam/steamapps/workshop",
+                    ],
+                    "NetworkMode": "host",
+                },
+            }
+            container = await docker.containers.create_or_replace(
+                name=container_name,
+                config=config,
+            )
+            await container.start()
+            while timeout > 0:
+                container = await docker.containers.get(container_name)
+                info = await container.show()
+                if info["State"]["Status"] == "exited":
+                    break
+                else:
+                    timeout -= 3
+                    await asyncio.sleep(3)
+            await container.delete()
+    for mod in details["response"]["publishedfiledetails"]:
+        mod_id = mod["publishedfileid"]
+        mod_path = os.path.join(path, "content/322330", mod_id)
+        if os.path.exists(mod_path):
+            mods_path[mod_id] = mod_path
+    return mods_path
 
 
 async def download_mods(
     mods: List[str],
     path: str,
-) -> str:
-    """下载MOD.
+):
+    """下载模组.
 
     Args:
-        id (str | int): id.
-        mods (List[str]): 模组列表.
-        path (str): 挂载路径.
-        timeout (int, optional): 超时.
+        mods (List[str]): 模组.
+        path (str): 存储路径.
 
     Returns:
-        str: mods路径.
+        dict: {mod_id: mod_path, ...}.
     """
-    mod_path = os.path.join(path, "mods")
-    ugc_path = os.path.join(path, "ugc_mods")
-    if not os.path.exists(mod_path):
-        os.makedirs(mod_path)
-    if not os.path.exists(ugc_path):
-        os.makedirs(ugc_path)
+    mods_path = {}
     if not mods:
-        return mod_path, ugc_path
+        return mods_path
     details = await steamcmd.publishedfiledetails(mods)
-    await download_mods_by_fileurl(mod_path, details)
-    await download_mods_by_steamcmd(ugc_path, details)
-    return mod_path, ugc_path
+    mods_path.update(await download_mods_by_fileurl(os.path.join(path, "mods"), details))
+    mods_path.update(await download_mods_by_steamcmd(os.path.join(path, "ugc_mods"), details))
+    return mods_path
 
 
 async def upload(

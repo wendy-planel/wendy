@@ -29,23 +29,18 @@ class ModInfo(BaseModel):
 async def read_modinfo(
     mods: List[str] = Body(),
 ) -> List[ModInfo]:
-    mod_path, ugc_path = await download_mods(
+    mods_path = await download_mods(
         mods=mods,
         path=os.path.join(GAME_ARCHIVE_PATH, "mods"),
     )
     data = []
-    code = b""
     for mod_id in mods:
-        target_path = None
-        path1 = os.path.join(mod_path, f"workshop-{mod_id}/modinfo.lua")
-        path2 = os.path.join(ugc_path, f"content/322330/{mod_id}/modinfo.lua")
-        if os.path.exists(path1):
-            target_path = path1
-        elif os.path.exists(path2):
-            target_path = path2
-        if target_path:
-            with open(target_path, "rb") as file:
+        if mod_id in mods_path:
+            mod_path = mods_path[mod_id]
+            with open(os.path.join(mod_path, "modinfo.lua"), "rb") as file:
                 code = file.read()
+        else:
+            code = b""
         data.append(ModInfo(id=mod_id, code=code.decode(errors="ignore")))
     return data
 
@@ -64,16 +59,14 @@ async def download(
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
         for mod_id in mods:
-            dir_path = os.path.join(mods_path, mod_id)
-            if os.path.isdir(dir_path):
-                for root, _, files in os.walk(dir_path):
+            if mod_id in mods_path:
+                mod_path = mods_path[mod_id]
+                zip_file.write(mod_path, mod_id)
+                for root, _, files in os.walk(mod_path):
                     for file in files:
                         file_path = os.path.join(root, file)
-                        arcname = os.path.relpath(file_path, mods_path)
+                        arcname = os.path.join(mod_id, os.path.relpath(file_path, mod_path))
                         zip_file.write(file_path, arcname)
-            elif os.path.isfile(dir_path):
-                arcname = os.path.relpath(dir_path, mods_path)
-                zip_file.write(dir_path, arcname)
     buffer.seek(0)
     return Response(
         content=buffer.read(),
