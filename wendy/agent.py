@@ -3,7 +3,6 @@ from typing import List
 
 import io
 import os
-import uuid
 import asyncio
 import tarfile
 import zipfile
@@ -11,8 +10,6 @@ import zipfile
 import httpx
 import structlog
 import aiodocker
-import aiodocker.utils
-import aiodocker.multiplexed
 
 from wendy.cluster import Cluster
 from wendy import models, steamcmd
@@ -22,7 +19,7 @@ from wendy.settings import (
     GAME_ARCHIVE_PATH,
 )
 
-# 下载模组文件锁
+# 下载模组加锁
 lock = asyncio.Lock()
 log = structlog.get_logger()
 
@@ -141,26 +138,25 @@ async def download_mods_by_fileurl(
     mods_path = {}
     async with httpx.AsyncClient(timeout=10) as client:
         for mod_id, file_url in fileurl_mods:
-            async with lock:
-                target_path = os.path.join(path, f"workshop-{mod_id}")
-                if os.path.exists(target_path):
-                    shutil.rmtree(target_path)
-                for _ in range(3):
-                    try:
-                        response = await client.get(file_url)
-                        with zipfile.ZipFile(io.BytesIO(response.content), "r") as file:
-                            members = file.namelist()
-                            for member in members:
-                                zipinfo = file.getinfo(member)
-                                zipinfo.filename = zipinfo.filename.replace("\\", "/")
-                                file._extract_member(zipinfo, target_path, None)
-                        mods_path[mod_id] = target_path
-                        break
-                    except Exception:
-                        import traceback
+            target_path = os.path.join(path, f"workshop-{mod_id}")
+            if os.path.exists(target_path):
+                shutil.rmtree(target_path)
+            for _ in range(3):
+                try:
+                    response = await client.get(file_url)
+                    with zipfile.ZipFile(io.BytesIO(response.content), "r") as file:
+                        members = file.namelist()
+                        for member in members:
+                            zipinfo = file.getinfo(member)
+                            zipinfo.filename = zipinfo.filename.replace("\\", "/")
+                            file._extract_member(zipinfo, target_path, None)
+                    mods_path[mod_id] = target_path
+                    break
+                except Exception:
+                    import traceback
 
-                        log.warning("download_mods_by_fileurl error")
-                        log.warning(traceback.format_exc())
+                    log.warning("download_mods_by_fileurl error")
+                    log.warning(traceback.format_exc())
         return mods_path
 
 
@@ -179,7 +175,7 @@ async def download_mods_by_steamcmd(
             cmd.extend(["+workshop_download_item", "322330", mod_id])
         cmd.append("+quit")
         image = "steamcmd/steamcmd:latest"
-        container_name = f"dst_download_mods_{uuid.uuid4()}"
+        container_name = "dst_download_mods"
         async with aiodocker.Docker() as docker:
             await pull(image, docker)
             config = {
@@ -197,7 +193,7 @@ async def download_mods_by_steamcmd(
                 name=container_name,
                 config=config,
             )
-            await container.start()
+            await container.restart()
             while timeout > 0:
                 container = await docker.containers.get(container_name)
                 info = await container.show()
@@ -206,7 +202,8 @@ async def download_mods_by_steamcmd(
                 else:
                     timeout -= 3
                     await asyncio.sleep(3)
-            await container.delete()
+            if timeout <= 0:
+                await container.stop()
     for mod in details["response"]["publishedfiledetails"]:
         mod_id = mod["publishedfileid"]
         mod_path = os.path.join(path, "content/322330", mod_id)
@@ -232,8 +229,9 @@ async def download_mods(
     if not mods:
         return mods_path
     details = await steamcmd.publishedfiledetails(mods)
-    mods_path.update(await download_mods_by_fileurl(os.path.join(path, "mods"), details))
-    mods_path.update(await download_mods_by_steamcmd(os.path.join(path, "ugc_mods"), details))
+    async with lock:
+        mods_path.update(await download_mods_by_fileurl(os.path.join(path, "mods"), details))
+        mods_path.update(await download_mods_by_steamcmd(os.path.join(path, "ugc_mods"), details))
     return mods_path
 
 

@@ -286,11 +286,13 @@ class Cluster(BaseModel):
             with open(cluster_token_path, "r") as file:
                 cluster_token = file.read()
         ini = ClusterIni.load_from_file(os.path.join(cluster_path, "cluster.ini"))
-        master = ClusterWorld.load_from_file(cluster_path, "Master", docker_api)
-        caves = ClusterWorld.load_from_file(cluster_path, "Caves", docker_api)
+        world = []
+        for dir in os.listdir(cluster_path):
+            if dir in ["Master", "Caves"]:
+                world.append(ClusterWorld.load_from_file(cluster_path, dir, docker_api))
         cluster = cls(
             ini=ini,
-            world=[master, caves],
+            world=world,
             cluster_token=cluster_token,
         )
         # 将端口号重置为-1, 防止端口占用

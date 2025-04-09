@@ -53,9 +53,7 @@ async def publishedfiledetails(mods: List[str]) -> dict:
         if key in cache:
             return cache[key][1]
         url = "http://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/"
-        post_data = {
-            "itemcount": len(mods),
-        }
+        post_data = {"itemcount": len(mods)}
         for i in range(len(mods)):
             post_data[f"publishedfileids[{i}]"] = mods[i]
         async with httpx.AsyncClient() as client:
@@ -104,7 +102,7 @@ def parse_acf_file(acf_file_path: str) -> Dict[str, str]:
                 current_key = key
     acf = stack[0]
     data = {}
-    for mod_id, mod_info in acf["AppWorkshop"]["WorkshopItemDetails"].items():
+    for mod_id, mod_info in acf["AppWorkshop"]["WorkshopItemsInstalled"].items():
         data[mod_id] = str(mod_info["timeupdated"])
     return data
 

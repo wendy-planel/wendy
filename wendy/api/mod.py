@@ -37,11 +37,11 @@ async def read_modinfo(
     for mod_id in mods:
         if mod_id in mods_path:
             mod_path = mods_path[mod_id]
-            with open(os.path.join(mod_path, "modinfo.lua"), "rb") as file:
+            with open(os.path.join(mod_path, "modinfo.lua"), "r") as file:
                 code = file.read()
         else:
-            code = b""
-        data.append(ModInfo(id=mod_id, code=code.decode(errors="ignore")))
+            code = ""
+        data.append(ModInfo(id=mod_id, code=code))
     return data
 
 
