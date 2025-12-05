@@ -1,8 +1,6 @@
 services:
   wendy-apiserver:
     image: ylei2023/wendy-apiserver:latest
-    ports:
-      - "8001:8000"
     volumes:
       - ${PWD}/data:${PWD}/data
       - /var/run/docker.sock:/var/run/docker.sock
@@ -12,6 +10,7 @@ services:
       - DATABASE_URL=sqlite:${PWD}/data/wendy.sqlite3
       - STEAM_API_KEY=${STEAM_API_KEY}
     restart: always
+
   wendy-plane:
     image: ylei2023/wendy-plane:latest
     ports:

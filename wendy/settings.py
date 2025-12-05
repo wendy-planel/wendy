@@ -10,7 +10,6 @@ DOCKER_API_DEFAULT = os.environ.get(
 )
 DST_IMAGE = os.environ.get("DST_IMAGE", default="ylei2023/dontstarvetogether")
 
-# 数据量配置
 DATABASE_URL = os.environ.get("DATABASE_URL", default="sqlite://wendy.sqlite3")
 TORTOISE_ORM = {
     "connections": {"default": DATABASE_URL},
